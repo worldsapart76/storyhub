@@ -53,9 +53,21 @@ route ([../auth.md](../auth.md)).
 
 - Project `StoryHub` (separate from CollectCore)
 - Postgres service provisioned
-- Empty service `storyhub-api` with a public `*.up.railway.app` domain
+- Service `storyhub-api` with a public domain `ffstoryhub.up.railway.app`
 - Env vars set: `AUTH_TOKEN`, `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT_URL`, `DATABASE_URL` (reference-linked to Postgres)
-- No code deployed yet — Phase 1 creates the service code, hooks up GitHub deployment, and pushes
 
-> The exact public URL is saved in the user's credential storage — always ask;
-> do not assume `storyhub.up.railway.app`.
+## Deployment (Phase 1, done as of 2026-06-14)
+
+- GitHub repo `worldsapart76/storyhub`; Railway deploys the `storyhub-api`
+  service from the `main` branch on every push (auto-deploy).
+- Monorepo: the service's **Root Directory** is set to `railway/` in the
+  Railway dashboard, so Nixpacks builds from there.
+- Deploy config: [`railway/railway.json`](../../railway/railway.json) — NIXPACKS
+  builder, `uvicorn app.main:app` start command, `/health` healthcheck. Python
+  pinned to 3.12 via `railway/.python-version`.
+- Verified live: `GET /health` → `200 {"status":"ok"}` (lifespan opened the
+  Postgres pool and ran `schema.sql`); `/api/*` returns `401` without a valid
+  bearer token.
+
+> The public URL `ffstoryhub.up.railway.app` is also saved in the user's
+> credential storage. Do not assume `storyhub.up.railway.app`.
