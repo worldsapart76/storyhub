@@ -8,8 +8,9 @@ IndexedDB, offline-capable via service worker + CacheStorage.
 **No code yet** — scaffold stage. First code lands in Phase 5 (basic) and
 Phase 6 (full features).
 
-Framework (React+Vite / SvelteKit / vanilla) is **not yet decided** — see
-[../docs/open-questions.md](../docs/open-questions.md).
+Framework: **React + Vite** (decided 2026-06-14; with `vite-plugin-pwa` and
+list virtualization for the ~7k-book result list) — see
+[../docs/ux/pwa-shell.md](../docs/ux/pwa-shell.md).
 
 Specs: [../docs/ux/](../docs/ux/) (start with
 [pwa-shell.md](../docs/ux/pwa-shell.md)).

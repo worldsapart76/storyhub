@@ -20,7 +20,7 @@ provisioned values to ask the user for; do not assume them.
 ## Phase 1 — Foundation: Railway hub + R2 + worker shell
 
 **What gets built:**
-- Railway service (FastAPI or similar — choice deferred to scaffold time) exposing all `/api/*` endpoints
+- Railway service (**FastAPI** — decided 2026-06-14) exposing all `/api/*` endpoints
 - Postgres schema set up with all tables from [data-model.md §6.3](data-model.md)
 - Auth token middleware on every endpoint
 - Cloudflare R2 bucket configured

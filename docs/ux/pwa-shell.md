@@ -17,9 +17,17 @@
 Served from Railway. Single codebase, serves all devices. Replaces tkinter,
 replaces CalibreFanFicBrowser.
 
-**[OPEN] PWA framework:** React + Vite, SvelteKit, plain HTML+vanilla JS — all
-viable. Decide during Phase 5 scaffold. Tracked in
-[../open-questions.md](../open-questions.md).
+**PWA framework: React + Vite [DECIDED 2026-06-14].** Chosen for the largest
+ecosystem and the most reliable AI-assisted development (solo dev leaning on
+Claude Code). Tradeoff accepted: React's runtime is the heaviest of the
+candidates, so the Palma cold-start target (<2s) is met deliberately rather
+than for free — see the constants below.
+
+Build constants (apply regardless, lock at Phase 5):
+- **Vite + `vite-plugin-pwa`** (Workbox under the hood) for the service worker, precaching, and the install manifest.
+- **Virtualize the result list** — ~7,343 books; use a windowing lib (e.g. `@tanstack/react-virtual`) so only visible rows render. Non-negotiable for e-ink performance.
+- **TypeScript.**
+- Keep the bundle lean: prefer `react-window`/`@tanstack/react-virtual` over heavier grids; `dnd-kit` for Reading List drag-drop; audit bundle size against the cold-start budget before shipping.
 
 ## 7.2 Top-level views [DECIDED]
 

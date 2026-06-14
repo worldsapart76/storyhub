@@ -2,7 +2,7 @@
 
 > Source: §4.3 of the original StoryHub design doc.
 
-[DECIDED on shape, OPEN on framework]
+[DECIDED] — framework: **FastAPI** (decided 2026-06-14).
 
 Hosted on Railway, exposed via `*.railway.app` subdomain. Single Postgres
 database for all queue/state. Also hosts the dashboard PWA shell + static
@@ -32,13 +32,22 @@ Every endpoint requires `Authorization: Bearer {token}`. See [../auth.md](../aut
 
 Database tables: see [../data-model.md §6.3](../data-model.md).
 
-## [OPEN] Framework choice
+## Framework: FastAPI [DECIDED 2026-06-14]
 
-Likely FastAPI (Python — same language as the worker, reuse models) or a Node
-service. **Not decided at scaffold stage** (this repo is docs-only so far);
-decide during Phase 1. Tradeoff: FastAPI shares language + models with the
-worker; Node aligns better with the PWA ecosystem. Tracked in
-[../open-questions.md](../open-questions.md).
+FastAPI (Python). Rationale:
+- Same language as the worker — shared Pydantic models for queue items, status
+  updates, snapshot pointers, reading-list / saved-filter payloads. One schema
+  source, no cross-language drift.
+- The "Node aligns with the PWA ecosystem" counter-argument is weak: the PWA is
+  built as static assets and served directly by FastAPI (or via Railway static
+  hosting). There's no shared runtime between the API and the PWA to gain from
+  matching languages.
+- The user already runs Python services; smaller operational surface.
+
+Implementation notes (lock at Phase 1): ASGI server (uvicorn), Pydantic v2
+models mirroring [../data-model.md §6.3](../data-model.md), async Postgres
+driver (asyncpg or SQLAlchemy 2.x async), bearer-token middleware on every
+route ([../auth.md](../auth.md)).
 
 ## Provisioning status (Phase 0, done)
 

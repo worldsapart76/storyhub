@@ -5,8 +5,8 @@
 
 ## Decisions deferred to implementation time (not blocking)
 
-- **Framework choice for Railway service (§4.3):** FastAPI (Python — shares language with worker) vs Node (better PWA ecosystem alignment). Decide during Phase 1 scaffold. _Not decided this session — scaffold is docs-only._
-- **PWA framework:** React + Vite, SvelteKit, plain HTML+vanilla JS — all viable. Decide during Phase 5 scaffold.
+- ~~**Framework choice for Railway service (§4.3):**~~ **DECIDED 2026-06-14: FastAPI** (Python — shares Pydantic models with the worker; the PWA is static assets FastAPI serves, so no Node-ecosystem gain). See [components/railway-service.md](components/railway-service.md).
+- ~~**PWA framework:**~~ **DECIDED 2026-06-14: React + Vite** (largest ecosystem + most reliable AI-assisted dev; React's heavier runtime is offset by list virtualization + bundle discipline to hit the Palma <2s cold-start target). See [ux/pwa-shell.md §7.1](ux/pwa-shell.md).
 - **Worker concurrency:** How many queue items processed in parallel? Likely 1–3. Tune during Phase 1.
 - **Auto-classifier LLM choice:** Likely Haiku 4.5 (cheap, fast, good at classification). Decide during Phase 7.
 - **Cover image hosting:** R2 under `/covers/{list_id}.jpg`. Trivial; lock at Phase 6.
