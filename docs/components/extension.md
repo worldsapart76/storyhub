@@ -3,6 +3,36 @@
 > Source: §4.1 (extension) and §4.2 (bookmarklet) of the original StoryHub
 > design doc.
 
+> **⚠ SUPERSEDED IN PART — the authority for the on-AO3 interaction model is the
+> Calibre-removal redesign §12.1–12.2** (reconciled Phase P, 2026-06-15). The
+> capture topology, badge set, and sync queue below are Calibre-era. Corrections,
+> in force:
+> - **No standalone "Add to StoryHub" button.** Capture = hooking AO3's native
+>   **Mark for Later** (which toggles to **Mark as Read** once listed). The extension
+>   *hooks AO3's real buttons and injects only DNF* (§12.2). DNF is the single
+>   injected control.
+> - **No FanFicFare anywhere** (hard rule). There is no first-fetch / epub fallback;
+>   only complete works are ever added. An epub-fetch failure is surfaced, not
+>   worked around by FanFicFare.
+> - **No `/api/status-updates` and no `status_updates` table.** Status/favorite
+>   changes are direct `UPDATE works` writes; the AO3 side-effects queue is
+>   **`ao3_actions`** (`mark_read | bookmark | remove_bookmark`, bookmark
+>   `{private:true}`), §12.2.
+> - **Bookmark = Favorite, created in the background.** AO3's Bookmark button only
+>   navigates to a form, so the extension **intercepts it and creates a private
+>   bookmark via a background authenticated POST** (no navigation); it also passively
+>   detects bookmarks you create through AO3's own form. Bookmarks are **always
+>   private** (never a user choice). Any bookmark = Favorite.
+> - **DNF also marks the work read on AO3** (AO3 has no DNF) → StoryHub `read_status=DNF`.
+> - **Pending actions drain AUTOMATICALLY** on any AO3 page load — **no on-AO3 banner,
+>   no one-tap Confirm.** Failures surface in the **Sync view** (failed `ao3_actions`),
+>   never silently. (Replaces the "Pending AO3 actions banner" below.)
+> - **Badge set:** N/A (not in library) vs **Unread | Read | DNF** + the orthogonal
+>   Favorite ★. **No "Priority" badge** — Priority is a reading list now.
+>
+> The unwired Phase-P prototype of these controls lives at
+> `pwa/src/components/ExtensionControls.tsx` (gallery → Surfaces → "Extension (on AO3)").
+
 ## 4.1 Browser extension [DECIDED]
 
 Single codebase, manifests for:
@@ -10,6 +40,10 @@ Single codebase, manifests for:
 - Firefox — desktop + Android
 
 ### On the AO3 work page
+
+> **SUPERSEDED:** see the §12.2 corrections at the top — no standalone Add button
+> (Mark for Later captures), only DNF is injected, no `/api/status-updates`, and the
+> pending-actions drain is automatic (no banner).
 
 - **"Add to StoryHub" button** inline near the work title, next to AO3's native action buttons. Captures metadata from DOM + fetches epub via authenticated session + POSTs to `/api/queue`. Visual feedback: idle → loading → success / error. Shows "Already in your library" with current status if the story is already imported.
 - **"DNF" button** in the same area. Always visible (no anti-misclick delay — distinct enough). On click:
@@ -28,7 +62,7 @@ Three states the badge renders for any work_id visible on a page:
 | State | Render |
 |---|---|
 | **N/A** | Distinct gray/outlined indicator. Story is NOT in the user's StoryHub library at all. |
-| **Status badge** | Existing color-coded read status (Unread / Priority / Read / Favorite / DNF). Story IS in the library; this is its current status. Color scheme lifted from the existing Read Status Badge extension. |
+| **Status badge** | Existing color-coded read status. Story IS in the library; this is its current status. Color scheme lifted from the existing Read Status Badge extension. **SUPERSEDED:** the set is now **Unread / Read / DNF** + the orthogonal Favorite ★ — **no "Priority"** (it's a reading list now, §8). |
 
 Distinguishing N/A from Unread matters: Unread = "in your library, haven't
 read yet" (a managed state); N/A = "not in your library at all" (different
@@ -66,7 +100,7 @@ extension storage. Used in every Railway request as
 
 | Failure mode | Behavior |
 |---|---|
-| Epub download from AO3 fails | Post metadata to `/api/queue` with no epub; worker falls back to FanFicFare for first-fetch. Surface as warning, not error. |
+| Epub download from AO3 fails | **SUPERSEDED:** no FanFicFare fallback (hard rule) — only complete works are added. Surface the failure for retry; do not add a work without its epub. |
 | Railway POST fails (offline, server down) | Extension's local outbox queues the operation in IndexedDB. Retries on next page load or every N seconds. Indicator on extension icon (badge text shows pending count). |
 | User logged out of AO3 | Epub fetch returns a login page → extension detects, prompts user to log in, doesn't post anything yet. |
 | Story already in library | Button shows "Already in your library" with current status. No duplicate add. |

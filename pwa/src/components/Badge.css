@@ -1,0 +1,26 @@
+.badge {
+  display: inline-flex; align-items: center;
+  font-weight: var(--weight-medium); white-space: nowrap;
+}
+.badge--solid {
+  padding: 2px var(--space-2); border-radius: var(--radius-sm);
+  font-size: var(--text-xs); color: #fff; letter-spacing: 0.02em;
+}
+.badge--rating {
+  min-width: 20px; height: 18px; padding: 0 5px; justify-content: center;
+  border-radius: var(--radius-sm); font-size: var(--text-xs); color: #fff;
+  font-weight: var(--weight-bold);
+}
+
+.favstar {
+  border: none; background: transparent; padding: 0 2px;
+  font-size: var(--text-md); line-height: 1; color: var(--text-muted);
+}
+.favstar.is-on { color: var(--favorite); }
+
+.avail {
+  font-size: var(--text-xs); padding: 1px 6px; border-radius: var(--radius-sm);
+  text-transform: uppercase; letter-spacing: 0.04em; font-weight: var(--weight-medium);
+}
+.avail--deleted { background: var(--exclude-quiet); color: var(--danger); }
+.avail--locked { background: var(--bg-sunken); color: var(--text-secondary); }

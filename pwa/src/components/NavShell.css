@@ -1,0 +1,56 @@
+.shell { display: flex; height: 100%; background: var(--bg); }
+
+.shell__rail {
+  width: var(--nav-rail-w); flex: none;
+  background: var(--bg-elevated); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; padding: var(--space-3) var(--space-2);
+}
+.shell__brand {
+  font-weight: var(--weight-bold); font-size: var(--text-lg);
+  padding: var(--space-2) var(--space-2) var(--space-4);
+}
+.shell__navlist { display: flex; flex-direction: column; gap: 2px; }
+.shell__nav {
+  display: flex; align-items: center; gap: var(--space-3);
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  font-size: var(--text-sm); text-align: left; position: relative;
+  min-height: var(--tap-target);
+}
+.shell__nav:hover { background: var(--bg-hover); color: var(--text); }
+.shell__nav.is-active { background: var(--accent-quiet); color: var(--accent); font-weight: var(--weight-medium); }
+.shell__icon { font-size: var(--text-md); width: 22px; text-align: center; }
+.shell__badge {
+  margin-left: auto; background: var(--accent); color: var(--text-on-accent);
+  font-size: var(--text-xs); border-radius: var(--radius-pill);
+  min-width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
+}
+
+.shell__content { flex: 1; min-width: 0; overflow: auto; }
+.shell__placeholder {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--space-2); color: var(--text-muted); text-align: center;
+}
+.shell__placeicon { font-size: var(--text-2xl); }
+.shell__placeholder p { font-size: var(--text-sm); }
+
+/* ---- Narrow container → bottom tabs ---- */
+@container viewport (max-width: 720px) {
+  .shell { flex-direction: column; }
+  .shell__rail {
+    width: 100%; order: 2; flex-direction: row;
+    border-right: none; border-top: 1px solid var(--border);
+    padding: 0; height: var(--bottom-tabs-h);
+  }
+  .shell__brand { display: none; }
+  .shell__navlist { flex-direction: row; flex: 1; gap: 0; }
+  .shell__nav {
+    flex: 1; flex-direction: column; gap: 2px; justify-content: center;
+    padding: var(--space-1); border-radius: 0; min-height: 0;
+  }
+  .shell__label { font-size: 10px; }
+  .shell__nav.is-active { background: transparent; }
+  .shell__nav.is-active .shell__icon { transform: translateY(-1px); }
+  .shell__badge { position: absolute; top: 4px; right: 50%; margin-left: 0; transform: translateX(14px); }
+  .shell__content { order: 1; flex: 1; }
+}

@@ -1,0 +1,127 @@
+/* Gallery harness chrome. Deliberately neutral so it doesn't compete with the
+   prototype content it frames. */
+
+.gallery {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* ---- Toolbar ---- */
+.gallery__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.gallery__brand { font-weight: var(--weight-bold); font-size: var(--text-md); }
+.gallery__tag {
+  font-weight: var(--weight-normal);
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: var(--space-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gallery__controls { display: flex; gap: var(--space-3); }
+
+.seg { display: inline-flex; background: var(--bg-sunken); border-radius: var(--radius-md); padding: 2px; }
+.seg__btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 4px var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.seg__btn.is-on { background: var(--bg-elevated); color: var(--text); box-shadow: var(--shadow-sm); }
+
+/* ---- Body split ---- */
+.gallery__body { flex: 1; display: flex; min-height: 0; }
+
+.gallery__nav {
+  width: 200px;
+  flex: none;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-2);
+}
+.gallery__navgroup { margin-bottom: var(--space-4); }
+.gallery__navhead {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 0 var(--space-2) var(--space-1);
+}
+.gallery__navitem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.gallery__navitem:hover { background: var(--bg-hover); color: var(--text); }
+.gallery__navitem.is-active { background: var(--accent-quiet); color: var(--accent); font-weight: var(--weight-medium); }
+
+/* ---- Canvas ---- */
+.gallery__canvas {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg);
+  color: var(--text);
+}
+.gallery__fluid { padding: var(--space-5); }
+.gallery__stage {
+  min-height: 100%;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-5);
+  background:
+    repeating-linear-gradient(45deg, transparent, transparent 10px,
+      color-mix(in srgb, var(--border) 40%, transparent) 10px,
+      color-mix(in srgb, var(--border) 40%, transparent) 11px);
+}
+
+/* ---- Device frames ---- */
+/* The frame is a query container named `viewport`, so responsive components use
+   @container viewport (...) and react to the FRAME width, not the browser. */
+/* Desktop = fill the canvas (no artificial cap), so surfaces preview at a
+   realistic wide-browser width. The filter panel stays a fixed 320px; only the
+   results area widens — matching the real app. */
+.frame--desktop {
+  width: 100%; background: var(--bg);
+  container-type: inline-size; container-name: viewport;
+}
+.frame--tablet, .frame--phone {
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  align-self: flex-start;
+}
+.frame__notch {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: center;
+  padding: 4px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+  text-transform: capitalize;
+}
+.frame__screen {
+  height: 720px; overflow: auto;
+  container-type: inline-size; container-name: viewport;
+}

@@ -1,0 +1,23 @@
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid transparent; border-radius: var(--radius-md);
+  font-weight: var(--weight-medium); white-space: nowrap;
+  transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+.btn--md { padding: 8px var(--space-4); font-size: var(--text-sm); min-height: 36px; }
+.btn--sm { padding: 4px var(--space-3); font-size: var(--text-xs); min-height: 28px; }
+
+.btn--primary { background: var(--accent); color: var(--text-on-accent); }
+.btn--primary:hover { background: var(--accent-hover); }
+
+.btn--secondary { background: var(--bg-elevated); color: var(--text); border-color: var(--border-strong); }
+.btn--secondary:hover { background: var(--bg-hover); }
+
+.btn--ghost { background: transparent; color: var(--text-secondary); }
+.btn--ghost:hover { background: var(--bg-hover); color: var(--text); }
+
+.btn--outline { background: transparent; color: var(--accent); border-color: var(--accent); }
+.btn--outline:hover { background: var(--accent-quiet); }
+
+.btn--danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+.btn--danger:hover { background: var(--exclude-quiet); }

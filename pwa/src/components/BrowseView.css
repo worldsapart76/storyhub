@@ -1,0 +1,102 @@
+.browse { display: flex; flex-direction: column; height: 100%; position: relative; min-width: 0; }
+
+/* ---- Header (always visible) ---- */
+.browse__header {
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated); flex: none;
+}
+.browse__search {
+  flex: 1; min-width: 0; padding: 9px var(--space-3);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--bg-sunken); font-size: var(--text-base);
+}
+.browse__tools { display: flex; align-items: center; gap: var(--space-2); flex: none; }
+
+.browse__iconbtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px; padding: 0 var(--space-3);
+  border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text);
+  border-radius: var(--radius-md); font-size: var(--text-sm); white-space: nowrap;
+}
+.browse__iconbtn.is-on { background: var(--accent-quiet); color: var(--accent); border-color: var(--accent); }
+.browse__filtercount {
+  background: var(--accent); color: var(--text-on-accent); font-size: var(--text-xs);
+  border-radius: var(--radius-pill); min-width: 16px; height: 16px; display: inline-flex;
+  align-items: center; justify-content: center; padding: 0 4px;
+}
+.browse__iconbtn.is-on .browse__filtercount { background: var(--accent); }
+
+/* sort menu */
+.browse__sortwrap { position: relative; }
+.browse__menuscrim { position: fixed; inset: 0; background: transparent; z-index: 30; }
+.browse__menu {
+  position: absolute; top: calc(100% + 4px); right: 0; z-index: 31;
+  min-width: 200px; list-style: none; margin: 0; padding: 4px;
+  background: var(--bg-elevated); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-lg);
+}
+.browse__menuitem {
+  display: block; width: 100%; text-align: left; border: none; background: transparent;
+  color: var(--text); padding: 7px var(--space-2); border-radius: var(--radius-sm); font-size: var(--text-sm);
+}
+.browse__menuitem:hover { background: var(--bg-hover); }
+.browse__menuitem.is-on { background: var(--accent-quiet); color: var(--accent); font-weight: var(--weight-medium); }
+
+/* On narrow, collapse the icon buttons to icon-only so search can breathe. */
+@container viewport (max-width: 640px) {
+  .browse__iconlabel { display: none; }
+  .browse__iconbtn { padding: 0 10px; }
+}
+
+/* ---- Body split (overflow hidden = no horizontal scroll from the drawer) ---- */
+.browse__body { flex: 1; display: flex; min-height: 0; position: relative; overflow: hidden; }
+.browse__results { flex: 1; min-width: 0; overflow-y: auto; padding: var(--space-4); }
+
+.browse__starred { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-3); }
+.browse__starchip {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-secondary);
+  padding: 5px var(--space-3); border-radius: var(--radius-pill); font-size: var(--text-sm); white-space: nowrap;
+  cursor: pointer;
+}
+.browse__starchip svg { width: 13px; height: 13px; }
+/* Reading-list chips — amber (the ★ family). */
+.browse__starchip--list { color: color-mix(in srgb, var(--favorite) 70%, var(--text-secondary)); border-color: color-mix(in srgb, var(--favorite) 40%, var(--border-strong)); }
+.browse__starchip--list.is-on { background: color-mix(in srgb, var(--favorite) 16%, var(--bg-elevated)); color: var(--favorite); border-color: var(--favorite); }
+/* Saved-filter chips — accent (indigo). */
+.browse__starchip--filter { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border-strong)); }
+.browse__starchip--filter.is-on { background: var(--accent-quiet); color: var(--accent); border-color: var(--accent); }
+
+.browse__banner {
+  display: flex; align-items: center; gap: var(--space-2);
+  background: var(--accent-quiet); color: var(--accent); border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3); font-size: var(--text-sm); margin-bottom: var(--space-3);
+}
+.browse__banner button { border: none; background: transparent; color: inherit; text-decoration: underline; font-size: var(--text-sm); margin-left: auto; }
+
+.browse__count { font-size: var(--text-sm); color: var(--text-muted); }
+.browse__bulk { margin-bottom: var(--space-3); }
+.browse__list { display: flex; flex-direction: column; gap: var(--space-3); }
+
+/* ---- Filter panel ---- */
+/* Narrow default: slide-in drawer (off-canvas, clipped by body overflow:hidden). */
+.browse__panel {
+  position: absolute; top: 0; right: 0; height: 100%;
+  width: min(340px, 88%); z-index: 20;
+  transform: translateX(100%); transition: transform var(--dur) var(--ease);
+  box-shadow: var(--shadow-lg); border-left: 1px solid var(--border);
+}
+.browse__panel.is-open { transform: translateX(0); }
+.browse__scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.35); z-index: 15; }
+
+/* Wide: docked in flow when open; fully removed (no width, no scroll) when closed. */
+@container viewport (min-width: 880px) {
+  .browse__panel {
+    position: static; transform: none; box-shadow: none; z-index: auto;
+    width: var(--filter-panel-w); flex: none; height: auto;
+    transition: none;
+  }
+  .browse__panel:not(.is-open) { display: none; }
+  .browse__scrim { display: none; }
+}

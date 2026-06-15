@@ -1,0 +1,142 @@
+/* Extension injected controls. The host (.ao3 *) mimics AO3's DARK skin (the
+   user's real skin) with FIXED colors — it's an external page, so it ignores the
+   gallery's light/dark toggle. Everything StoryHub injects is prefixed .sh-,
+   tinted indigo, and tagged ◆ so it's obvious what's ours vs AO3's. */
+
+.ao3 {
+  font-family: 'Lucida Grande', 'Lucida Sans Unicode', Verdana, Helvetica, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cfcfcf;
+  background: #2b2b2b;
+  border: 1px solid #000;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* ---- AO3 site header (two dark rows) ---- */
+.ao3-topbar {
+  background: #1a1a1a;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ao3-logo { font-size: 19px; color: #9f9fe6; font-weight: 400; }
+.ao3-logomark { color: #c0392b; margin-right: 4px; }
+.ao3-greeting { font-size: 12px; color: #cfcfcf; }
+
+.ao3-navbar {
+  background: linear-gradient(#3a3a3a, #2c2c2c);
+  border-top: 1px solid #000;
+  border-bottom: 1px solid #000;
+  padding: 7px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ao3-nav { display: flex; gap: 18px; font-size: 13px; }
+.ao3-nav span { color: #e0e0e0; }
+.ao3-searchbox { display: flex; align-items: center; gap: 6px; }
+.ao3-searchinput { width: 200px; height: 18px; background: #ddd; border: 1px solid #000; border-radius: 2px; display: inline-block; }
+.ao3-searchbtn {
+  font-size: 12px; color: #2a2a2a;
+  background: linear-gradient(#eceae4, #cfc8bb); border: 1px solid #8d8d8d;
+  border-radius: 3px; padding: 1px 10px;
+}
+
+.ao3-page { padding: 18px; }
+
+/* ---- AO3 action-button row (right-aligned beige buttons) ---- */
+.ao3-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.ao3-btn {
+  font-size: 12px; color: #2a2a2a;
+  background: linear-gradient(#eceae4, #cdc6b9);
+  border: 1px solid #8d8d8d;
+  border-radius: 3px;
+  padding: 4px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ao3-btn:hover { background: linear-gradient(#f4f2ec, #d8d2c6); }
+/* a hooked native button whose StoryHub-tracked state is currently active */
+.ao3-btn.is-hooked-active { box-shadow: 0 0 0 2px #6a6ae0; border-color: #6a6ae0; }
+
+/* ---- AO3 work meta box (dark, bordered) ---- */
+.ao3-meta {
+  margin: 0 0 24px;
+  padding: 16px 18px;
+  border: 1px solid #555;
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 6px 0;
+  font-size: 13px;
+  background: #2b2b2b;
+}
+.ao3-meta dt { color: #e6e6e6; }
+.ao3-meta dt:nth-of-type(2) { font-weight: 700; text-decoration: underline; } /* Archive Warning */
+.ao3-meta dd { margin: 0; color: #cfcfcf; }
+.ao3-tag { color: #9f9fe6; cursor: pointer; margin-right: 7px; }
+.ao3-tag:hover { text-decoration: underline; }
+.ao3-seriestext { color: #cfcfcf; }
+.ao3-stats { color: #bdbdbd; font-size: 12px; }
+
+/* ---- AO3 centered preface ---- */
+.ao3-preface { text-align: center; margin-bottom: 22px; }
+.ao3-title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 28px; font-weight: 400; color: #ececec; margin: 0 0 4px;
+  display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center;
+}
+.ao3-byline { font-size: 15px; font-weight: 400; margin: 0 0 18px; }
+.ao3-link { color: #9f9fe6; cursor: pointer; }
+.ao3-link:hover { text-decoration: underline; }
+.ao3-summary { text-align: left; max-width: 1000px; margin: 0 auto; }
+.ao3-summaryhead { font-weight: 700; color: #e6e6e6; margin: 0 0 4px; }
+.ao3-summary blockquote { margin: 0; padding-left: 18px; color: #cfcfcf; }
+
+/* ---- work text ---- */
+.ao3-body { max-width: 1000px; margin: 0 auto; }
+.ao3-chapter { font-family: Georgia, serif; font-size: 18px; font-weight: 400; color: #e6e6e6; margin: 0 0 12px; text-align: center; }
+.ao3-body p { margin: 0 0 12px; color: #d4d4d4; }
+
+/* =========================================================================
+   StoryHub-INJECTED elements (indigo + ◆). Fixed colors (extension-rendered).
+   ========================================================================= */
+.sh-mark { color: #8b8bf0; font-weight: 700; flex: 0 0 auto; }
+
+/* DNF — the one injected control, sits in the AO3 action row */
+.sh-dnf {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: transparent; color: #ef7d72; border: 1px solid #c0392b;
+  border-radius: 3px; font-size: 12px; padding: 4px 11px; cursor: pointer;
+}
+.sh-dnf:hover:not(:disabled) { background: #3a2220; }
+.sh-dnf:disabled { opacity: 0.4; cursor: default; }
+
+/* status badge next to the title */
+.sh-titlebadge { display: inline-flex; align-items: center; gap: 5px; }
+.sh-badge {
+  font-family: var(--font-ui);
+  font-size: 12px; font-weight: 700;
+  padding: 2px 9px; border-radius: 999px; color: #fff; white-space: nowrap;
+}
+.sh-badge--unread { background: #3b82f6; }
+.sh-badge--read { background: #6b7585; }
+.sh-badge--dnf { background: #9aa4b2; }
+.sh-fav { color: #f59e0b; font-size: 15px; }
+
+/* narrow */
+@container viewport (max-width: 560px) {
+  .ao3-meta { grid-template-columns: 1fr; gap: 0 0; }
+  .ao3-meta dt { margin-top: 6px; }
+  .ao3-actions { justify-content: flex-start; }
+  .ao3-searchinput { width: 100px; }
+}

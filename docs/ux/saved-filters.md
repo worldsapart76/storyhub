@@ -41,7 +41,18 @@ Railway. Sync across devices. Single source of truth.
 
 ## Display order in nav [DECIDED]
 
-Drag-drop user-orderable; starred filters pinned at top.
+Starred filters sort to the top, the rest alphabetical — the **same ordering rule
+as Reading Lists** (revised during Phase P, 2026-06-14; supersedes the earlier
+"drag-drop user-orderable" plan — automatic sort was preferred for consistency
+across the two list surfaces, so there is no manual drag order).
+
+## Where filters are created [DECIDED — Phase P]
+
+A Saved Filter is **created on Browse** (a "Save filter" control in the filter
+drawer, next to "Clear all"), where the filter state being captured is live. The
+Saved Filters surface is for **editing/managing** existing filters only (rename,
+star, delete, snapshot-to-list, re-validate) — it has no "new filter" entry
+point.
 
 ## Default seeds at install [DECIDED]
 

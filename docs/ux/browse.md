@@ -39,20 +39,26 @@ above the results.
 
 Each filter axis is a category. v1 category set, in render order:
 
+> **Sources reconciled per redesign §6.3 / §12.6:** structural categories now
+> draw from `work_tags ⋈ tags` (by `kind`) rather than the Calibre `#all_*`
+> columns, and Rating from the `rating` enum (not `#maturity`). Curated
+> categories reference the `categories` table. Names/intent below stand.
+
 | # | Category | Source | Curated? | Notes |
 |---|---|---|---|---|
-| 1 | **Fandom** | `#all_fandoms` | structural | Multi-value, raw from AO3 |
-| 2 | **Relationship** | `#all_relationships` | structural | Multi-value, raw from AO3 |
-| 3 | **Character** | `#all_characters` | structural | Multi-value, raw from AO3 |
-| 4 | **Universe** | tags | curated | AU + canon framing (Modern AU, Canon Compliant, Crossover, etc.) |
-| 5 | **ABO** | tags | curated | Omegaverse-specific |
-| 6 | **Content** | tags + AO3 warnings | curated | Sexual content + warning-style content combined |
-| 7 | **Trope** | tags | curated | Plot tropes (enemies-to-lovers, found family, etc.) |
-| 8 | **Dynamics** | tags | curated | Character-relationship modes (miscommunication, established relationship) |
-| 9 | **Mood** | tags | curated | Tone (fluff, angst, hurt/comfort) |
-| 10 | **Structure** | tags | curated | Pace and form (slow burn, one-shot, epistolary) |
-| 11 | **Other** | tags | curated | Sink: explicitly othered + uncategorized fallthrough |
-| 12 | **Rating** | `#maturity` | structural | 5 fixed values from AO3 |
+| 1 | **Fandom** | tags (`kind=fandom`) | structural | Multi-value, raw from AO3 |
+| 2 | **Relationship** | tags (`kind=relationship`) | structural | Multi-value, raw from AO3 |
+| 3 | **Character** | tags (`kind=character`) | structural | Multi-value, raw from AO3 — *who appears* |
+| 4 | **Identity** | tags | curated | *What a character IS in this AU* — species/role/state (Vampire X, Human Y, Trans Z). Distinct from Character (who) and Universe (world framing). **Added 2026-06-14 (Phase P); real-data audit still planned before category-list lock.** |
+| 5 | **Universe** | tags | curated | AU + canon framing (Modern AU, Canon Compliant, Crossover, etc.) — *world-level* |
+| 6 | **ABO** | tags | curated | Omegaverse-specific |
+| 7 | **Content** | tags + AO3 warnings | curated | Sexual content + warning-style content combined |
+| 8 | **Trope** | tags | curated | Plot tropes (enemies-to-lovers, found family, etc.) |
+| 9 | **Dynamics** | tags | curated | Character-relationship modes (miscommunication, established relationship) |
+| 10 | **Mood** | tags | curated | Tone (fluff, angst, hurt/comfort) |
+| 11 | **Structure** | tags | curated | Pace and form (slow burn, one-shot, epistolary) |
+| 12 | **Other** | tags | curated | Sink: explicitly othered + uncategorized fallthrough |
+| 13 | **Rating** | `rating` enum | structural | 5 fixed values from AO3 |
 
 **Order rationale:** who/where/what-world first (Fandom, Relationship,
 Character). Then narrative buckets (Universe, ABO, Content). Then narrower
@@ -60,6 +66,7 @@ vibe-shaping categories (Trope, Dynamics, Mood, Structure). Other is the sink
 near the end. Rating is last as a final coarse filter.
 
 **Naming intent (why these specific names — see handoff notes):**
+- **Identity** — character-state freeforms ("Vampire Lee Minho", "Human Han", "Trans X", "BAMF X") are a large, cross-fandom class that would otherwise overload **Other**. Boundary rule: *Character = who appears · Identity = what they are in this AU (species/role/state) · Universe = the world's framing ("Vampires", "Paranormal") · ABO keeps its own axis.*
 - **Universe** (not "AU") — absorbs both AU stories AND Canon Compliant; the axis is "where/when the story lives in fictional space".
 - **Content** combines sexual content AND warning-style content (Major Character Death, Graphic Violence) — the user draws no filtering distinction between them.
 - **ABO** (not "Omegaverse") — brevity; mobile space matters.

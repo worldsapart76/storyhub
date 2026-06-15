@@ -1,0 +1,26 @@
+.statuscluster { display: inline-flex; align-items: center; gap: var(--space-2); }
+
+.statuscluster__seg {
+  display: inline-flex; background: var(--bg-sunken);
+  border-radius: var(--radius-md); padding: 2px;
+}
+.statuscluster__seg-btn {
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: 5px var(--space-3); border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+.statuscluster__seg-btn.is-on {
+  background: var(--bg-elevated); color: var(--text);
+  box-shadow: var(--shadow-sm); font-weight: var(--weight-medium);
+}
+
+.statuscluster__fav {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--border-strong); background: var(--bg-elevated);
+  color: var(--text-secondary); padding: 5px var(--space-3);
+  border-radius: var(--radius-md); font-size: var(--text-sm);
+}
+.statuscluster__fav.is-on { color: var(--favorite); border-color: var(--favorite); }
+
+.statuscluster.is-compact .statuscluster__seg-btn { padding: 4px var(--space-2); font-size: var(--text-xs); }
+.statuscluster.is-compact .statuscluster__fav { padding: 4px var(--space-2); }

@@ -1,5 +1,11 @@
 # Build phases
 
+> ⚠️ **SUPERSEDED (2026-06-14).** This is the Calibre-era plan. The project has
+> adopted the Calibre-removal redesign — the live build sequence is
+> **docs/calibre-removal-redesign.md §13**. This file is retained only as
+> historical context for Phases 0–1 (already built) and is not the plan to
+> follow. Do not start new work from here.
+
 > Source: §10 of the original StoryHub design doc. Phases are in dependency
 > order. Each concludes with a clear "what works after this" milestone so
 > progress is testable end-to-end.
@@ -48,6 +54,37 @@ provisioned values to ask the user for; do not assume them.
 - A queue item with metadata + epub → ends up in Calibre with `#ao3_work_id`, `#collection`, `#primaryship`, etc. populated
 - Review queue accumulates un-auto-resolvable items, accessible via Railway directly
 - X4 sync triggerable via a worker CLI command (no dashboard yet)
+
+### Phase 2 build chunks (step-by-step, review between)
+
+Decomposed for incremental review. Decisions locked: Calibre writes via the
+digest-authed `storyhub` REST account (no `calibredb`); worker concurrency
+**serial** (1 item at a time) for Phase 2.
+
+1. ✅ **Calibre write spike** — verified (see calibre-rest-write-auth memory).
+2. ✅ **Worker config + deps** — `Settings` expanded (Calibre/R2 creds, ship
+   overrides, collection keywords, FanFicFare/X4 tunables lifted from FFF
+   `config.py`); `boto3` added. `is_calibre_configured()`/`is_r2_configured()`
+   are separate from `is_configured()` so missing Phase-2 creds don't block the
+   Phase-1 heartbeat shell.
+3. ✅ **Calibre REST client** (`worker/storyhub_worker/calibre.py`) — CLI→REST
+   port of FFF `sync/calibre.py`: `fetch_library`, `fetch_book`,
+   `fetch_existing_ship_values`, `search_ids`, `add_book`, `set_fields`,
+   `delete_book(s)`. **Fully verified against the live 7,344-book library**
+   (enumeration, single read, duplicate-add path). FFF's filename work-id
+   parsing was replaced — StoryHub passes the queue item's `ao3_work_id` into
+   `add_book` for duplicate resolution (R2-staged epubs are named by
+   `queue_item_id`, so they carry no work-id in the filename).
+4. ⏭️ **R2 client** — pull staging epub, upload library epub (boto3 S3). **NEXT.**
+5. ◻️ **Normalize lift** — `worker/normalize/ship.py` + `rules.py` verbatim from
+   FFF, imports rewired.
+6. ◻️ **Import pipeline** — wire into `engine.py`: queue item → R2 fetch →
+   Calibre add → normalize → auto-resolve vs review → ack with
+   `calibre_id_assigned`/`review_payload`/`error_message`. **Note:** source
+   existing ship values from the snapshot DB, not REST enumeration — see the
+   single-enumeration-point decision in [open-questions.md](open-questions.md).
+7. ◻️ **FanFicFare update-check wrapper** (`worker/sync/fanficfare.py`).
+8. ◻️ **X4 transfer + catalog** (`worker/export/`) via a worker CLI command.
 
 ## Phase 3 — Extension v1 (desktop Chromium + Firefox)
 
