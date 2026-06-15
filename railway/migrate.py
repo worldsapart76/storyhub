@@ -68,7 +68,8 @@ def _cv(book, name):
 def db():
     conn = sqlite3.connect(CACHE, timeout=30)
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA busy_timeout=30000")  # tolerate the concurrent scrape
+    conn.execute("PRAGMA busy_timeout=30000")  # tolerate concurrent writers
+    conn.execute("PRAGMA journal_mode=WAL")     # scrape + backfill write at once
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS calibre_books (
         calibre_id INTEGER PRIMARY KEY, work_id TEXT, is_ao3 INTEGER,
@@ -77,6 +78,9 @@ def db():
         series_index REAL, comments TEXT, languages TEXT, timestamp TEXT);
     CREATE TABLE IF NOT EXISTS sample (
         work_id INTEGER PRIMARY KEY, calibre_id INTEGER, fandom TEXT);
+    CREATE TABLE IF NOT EXISTS epub_backfill (
+        work_id INTEGER PRIMARY KEY, calibre_id INTEGER, r2_key TEXT,
+        sha256 TEXT, size INTEGER, status TEXT, error TEXT, done_at TEXT);
     CREATE TABLE IF NOT EXISTS ao3_scrape (
         work_id INTEGER PRIMARY KEY, calibre_id INTEGER, scraped_at TEXT,
         status TEXT, http_status INTEGER, title TEXT, authors TEXT,
@@ -221,7 +225,10 @@ def scrape_one(work_id):
         m = re.search(rf'<dd class="{kind} tags">(.*?)</dd>', body, re.S)
         out[kind] = _tags(m.group(1)) if m else []
     out["summary_html"] = _first(r'<div class="summary module">.*?<blockquote[^>]*>(.*?)</blockquote>', body)
-    out["title"] = _first(r'<h2 class="title heading">(.*?)</h2>', body)
+    raw_title = _first(r'<h2 class="title heading">(.*?)</h2>', body)
+    # AO3 embeds a "Restricted" lock <img> in the title heading for registered-
+    # only works — strip any tags so the title is clean text.
+    out["title"] = re.sub(r"<[^>]+>", "", raw_title).strip() if raw_title else None
     out["authors"] = [html.unescape(a) for a in re.findall(r'<a[^>]*rel="author"[^>]*>(.*?)</a>', body)]
     out["language"] = _first(r'<dd class="language"[^>]*>(.*?)</dd>', body)
     out["wordcount"] = _first(r'<dd class="words">(.*?)</dd>', body)
@@ -296,6 +303,49 @@ def scrape(do_all=False):
     status()
 
 
+# --- stage: backfill (Calibre epubs -> R2) -----------------------------------
+
+def _r2_client():
+    import boto3
+    from botocore.config import Config
+    return boto3.client(
+        "s3", endpoint_url=os.environ["R2_ENDPOINT_URL"],
+        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        region_name="auto", config=Config(signature_version="s3v4"))
+
+
+def backfill():
+    import hashlib
+    cal = _cal_opener()
+    cli = _r2_client()
+    bucket = os.environ["R2_BUCKET_NAME"]
+    conn = db()
+    todo = [(int(r["work_id"]), r["calibre_id"]) for r in conn.execute(
+        "SELECT work_id, calibre_id FROM calibre_books WHERE is_ao3=1 AND "
+        "CAST(work_id AS INTEGER) NOT IN (SELECT work_id FROM epub_backfill WHERE status='ok')")]
+    print(f"backfilling {len(todo)} epubs to R2 (bucket {bucket})...")
+    ok = fail = 0
+    for i, (wid, cid) in enumerate(todo, 1):
+        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
+        try:
+            data = cal.open(f"{CAL_URL}/get/EPUB/{cid}/{CAL_LIB}", timeout=120).read()
+            key = f"epubs/{wid}.epub"
+            cli.put_object(Bucket=bucket, Key=key, Body=data,
+                           ContentType="application/epub+zip")
+            conn.execute("INSERT OR REPLACE INTO epub_backfill VALUES (?,?,?,?,?,?,?,?)",
+                         (wid, cid, key, hashlib.sha256(data).hexdigest(), len(data), "ok", None, ts))
+            ok += 1
+        except Exception as e:  # noqa: BLE001
+            conn.execute("INSERT OR REPLACE INTO epub_backfill VALUES (?,?,?,?,?,?,?,?)",
+                         (wid, cid, None, None, None, "failed", str(e)[:300], ts))
+            fail += 1
+        conn.commit()  # per-epub: keep the write lock held only briefly
+        if i % 100 == 0:
+            print(f"  [{i}/{len(todo)}] ok={ok} fail={fail}")
+    print(f"backfill done: ok={ok} fail={fail}")
+
+
 # --- stage: load (cache -> Railway Postgres) ---------------------------------
 
 READSTATUS_MAP = {"Unread": "Unread", "Read": "Read", "DNF": "DNF",
@@ -307,6 +357,11 @@ KIND_FIELDS = [("fandoms", "fandom"), ("relationships", "relationship"),
 
 def _jl(v):
     return json.loads(v) if v else []
+
+
+def _clean_title(s):
+    """Strip any HTML (e.g. AO3's restricted-lock <img>) from a scraped title."""
+    return re.sub(r"<[^>]+>", "", s).strip() if s else None
 
 
 def _parse_dt(s):
@@ -336,7 +391,9 @@ async def _load_async(db_url, only_sample):
             + ("JOIN sample s ON s.work_id=a.work_id " if only_sample else "")
             + "WHERE a.status='ok'")
     works = [dict(r) for r in cache.execute(join)]
-    print(f"loading {len(works)} works to Postgres...")
+    epub = {r["work_id"]: (r["r2_key"], r["sha256"]) for r in
+            cache.execute("SELECT work_id, r2_key, sha256 FROM epub_backfill WHERE status='ok'")}
+    print(f"loading {len(works)} works to Postgres ({len(epub)} epubs backfilled)...")
 
     # Global maps: ship display alias (majority #primaryship per raw primary ship)
     # and collection-group membership (primary fandom per #collection).
@@ -383,12 +440,13 @@ async def _load_async(db_url, only_sample):
             wid = int(w["work_id"])
             chapters = w["chapters"]
             ch_count = int(chapters.split("/")[0]) if chapters and chapters.split("/")[0].isdigit() else None
+            ekey, ehash = epub.get(wid, (None, None))
             await conn.execute(
                 """INSERT INTO works (work_id, source, work_type, source_url, title,
                      summary_html, short_summary, wordcount, chapter_count, is_complete,
                      language, series_name, series_index, rating, read_status,
-                     is_favorite, pinned, date_added, availability)
-                   VALUES ($1,'ao3','fanfiction',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,false,$15,'live')
+                     is_favorite, pinned, date_added, availability, epub_r2_key, epub_hash)
+                   VALUES ($1,'ao3','fanfiction',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,false,$15,'live',$16,$17)
                    ON CONFLICT (work_id) DO UPDATE SET
                      source_url=EXCLUDED.source_url, title=EXCLUDED.title,
                      summary_html=EXCLUDED.summary_html, short_summary=EXCLUDED.short_summary,
@@ -397,16 +455,18 @@ async def _load_async(db_url, only_sample):
                      series_name=EXCLUDED.series_name, series_index=EXCLUDED.series_index,
                      rating=EXCLUDED.rating, read_status=EXCLUDED.read_status,
                      is_favorite=EXCLUDED.is_favorite, date_added=EXCLUDED.date_added,
+                     epub_r2_key=COALESCE(EXCLUDED.epub_r2_key, works.epub_r2_key),
+                     epub_hash=COALESCE(EXCLUDED.epub_hash, works.epub_hash),
                      updated_at=now()""",
                 wid, f"https://archiveofourown.org/works/{wid}",
-                w["title"] or w["ctitle"], w["summary_html"] or w["comments"],
+                _clean_title(w["title"]) or w["ctitle"], w["summary_html"] or w["comments"],
                 w["shortsummary"], w["wordcount"] or w["cwordcount"], ch_count,
                 bool(w["is_complete"]), w["language"] or (_jl(w["languages"])[:1] or [None])[0],
                 w["series_name"] or w["cseries"],
                 w["series_index"] if w["series_name"] else w["cseries_index"],
                 map_rating((_jl(w["rating"])[:1] or [None])[0]),
                 READSTATUS_MAP.get(w["readstatus"], "Unread"),
-                w["readstatus"] == "Favorite", _parse_dt(w["ts"]))
+                w["readstatus"] == "Favorite", _parse_dt(w["ts"]), ekey, ehash)
 
             await conn.execute("DELETE FROM work_authors WHERE work_id=$1", wid)
             for pos, name in enumerate(_jl(w["cauthors"])):
@@ -585,6 +645,7 @@ if __name__ == "__main__":
     sub.add_parser("select-sample")
     sc = sub.add_parser("scrape")
     sc.add_argument("--all", action="store_true")
+    sub.add_parser("backfill")
     ld = sub.add_parser("load")
     ld.add_argument("--all", action="store_true", help="all ok works (default: sample only)")
     ld.add_argument("--db", help="Postgres URL (else $DATABASE_PUBLIC_URL / $DATABASE_URL)")
@@ -603,6 +664,8 @@ if __name__ == "__main__":
         select_sample()
     elif args.cmd == "scrape":
         scrape(do_all=args.all)
+    elif args.cmd == "backfill":
+        backfill()
     elif args.cmd == "load":
         url = args.db or os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
         if not url:

@@ -23,10 +23,18 @@ function stripHtml(s: unknown): string {
   return String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+function fmtDate(s: unknown): string | undefined {
+  if (!s) return undefined
+  const d = new Date(String(s))
+  return isNaN(d.getTime())
+    ? String(s)
+    : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
 function toWork(r: unknown[]): Work {
   return {
     workId: Number(r[0]),
-    title: (r[1] as string) ?? '',
+    title: stripHtml(r[1]),
     authors: parseJson<string[]>(r[2], []),
     primaryShip: (r[3] as string) ?? null,
     primaryCollection: (r[4] as string) ?? null,
@@ -41,8 +49,8 @@ function toWork(r: unknown[]): Work {
     source: (r[13] as Work['source']) ?? undefined,
     sourceUrl: (r[14] as string) ?? undefined,
     language: (r[15] as string) ?? undefined,
-    dateAdded: (r[16] as string) ?? undefined,
-    dateRead: (r[17] as string) ?? null,
+    dateAdded: fmtDate(r[16]),
+    dateRead: fmtDate(r[17]) ?? null,
     summary: stripHtml(r[18]),
     tags: parseJson<Tag[]>(r[19], []),
   }
