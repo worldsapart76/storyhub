@@ -20,6 +20,10 @@ build/
 .env.*
 !.env.example
 .railway-token
+.ao3-cookie
+
+# Phase D migration scratch (scraped data; discarded after go-live)
+migration_cache.sqlite*
 
 # OS / editor
 .DS_Store
