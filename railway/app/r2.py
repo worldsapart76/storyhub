@@ -62,6 +62,13 @@ def presign_put(key: str, expires_in: int = 3600) -> str:
     )
 
 
+async def put_bytes(key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+    bucket = get_settings().r2_bucket_name
+    await asyncio.to_thread(
+        _client().put_object, Bucket=bucket, Key=key, Body=data, ContentType=content_type
+    )
+
+
 async def copy(src_key: str, dst_key: str) -> None:
     bucket = get_settings().r2_bucket_name
     await asyncio.to_thread(

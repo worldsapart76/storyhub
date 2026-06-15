@@ -513,6 +513,39 @@ async def _verify_async(db_url):
         await conn.close()
 
 
+# --- stage: snapshot (build SQLite locally for inspection) -------------------
+
+def snapshot(db_url, out):
+    import asyncio
+    asyncio.run(_snapshot_async(db_url, out))
+
+
+async def _snapshot_async(db_url, out):
+    import asyncpg
+    from app.snapshot_builder import build_sqlite
+    conn = await asyncpg.connect(db_url)
+    try:
+        data, n = await build_sqlite(conn)
+    finally:
+        await conn.close()
+    Path(out).write_bytes(data)
+    print(f"built snapshot: {n} works, {len(data):,} bytes -> {out}")
+    # quick inspection of the projection
+    sq = sqlite3.connect(out)
+    sq.row_factory = sqlite3.Row
+    tabs = [r[0] for r in sq.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")]
+    print("tables:", tabs)
+    print("work_cards rows:", sq.execute("SELECT COUNT(*) FROM work_cards").fetchone()[0])
+    for r in sq.execute("SELECT work_id,title,primary_ship,primary_collection,rating,"
+                        "read_status,is_favorite,tags FROM work_cards LIMIT 3"):
+        tags = json.loads(r["tags"])
+        print(f"\n  [{r['work_id']}] {r['title']}")
+        print(f"    ship={r['primary_ship']}  collection={r['primary_collection']}  "
+              f"{r['rating']} {r['read_status']} fav={r['is_favorite']}")
+        print(f"    {len(tags)} tags e.g.: {tags[:6]}")
+    sq.close()
+
+
 # --- stage: status / show ----------------------------------------------------
 
 def status():
@@ -557,6 +590,9 @@ if __name__ == "__main__":
     ld.add_argument("--db", help="Postgres URL (else $DATABASE_PUBLIC_URL / $DATABASE_URL)")
     vf = sub.add_parser("verify")
     vf.add_argument("--db", help="Postgres URL (else $DATABASE_PUBLIC_URL / $DATABASE_URL)")
+    sn = sub.add_parser("snapshot")
+    sn.add_argument("--db", help="Postgres URL (else $DATABASE_PUBLIC_URL / $DATABASE_URL)")
+    sn.add_argument("--out", default="snapshot_preview.sqlite")
     sub.add_parser("status")
     sh = sub.add_parser("show")
     sh.add_argument("work_id")
@@ -577,6 +613,11 @@ if __name__ == "__main__":
         if not url:
             sys.exit("no DB url (--db, DATABASE_PUBLIC_URL, or DATABASE_URL)")
         verify(url)
+    elif args.cmd == "snapshot":
+        url = args.db or os.environ.get("DATABASE_PUBLIC_URL") or os.environ.get("DATABASE_URL")
+        if not url:
+            sys.exit("no DB url (--db, DATABASE_PUBLIC_URL, or DATABASE_URL)")
+        snapshot(url, args.out)
     elif args.cmd == "status":
         status()
     elif args.cmd == "show":
