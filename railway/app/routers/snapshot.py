@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 
 from .. import r2, snapshot_builder
 from ..db import get_conn
@@ -30,6 +31,21 @@ async def current_snapshot(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No snapshot exists yet")
     return SnapshotVersion(**dict(row))
+
+
+@router.get("/file")
+async def snapshot_file(conn: asyncpg.Connection = Depends(get_conn)) -> Response:
+    """Stream the current snapshot SQLite (from R2). The PWA/worker download this
+    and query it client-side (§12.3)."""
+    row = await conn.fetchrow(
+        "SELECT r2_path, version FROM snapshot_versions ORDER BY version DESC LIMIT 1")
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No snapshot exists yet")
+    data = await r2.get_bytes(row["r2_path"])
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Snapshot object missing from R2")
+    return Response(content=data, media_type="application/x-sqlite3",
+                    headers={"X-Snapshot-Version": str(row["version"])})
 
 
 @router.post("/build", status_code=status.HTTP_201_CREATED)

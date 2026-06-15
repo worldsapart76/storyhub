@@ -69,6 +69,16 @@ async def put_bytes(key: str, data: bytes, content_type: str = "application/octe
     )
 
 
+async def get_bytes(key: str) -> bytes | None:
+    """Fetch an object's bytes, or None if it doesn't exist."""
+    bucket = get_settings().r2_bucket_name
+    try:
+        obj = await asyncio.to_thread(_client().get_object, Bucket=bucket, Key=key)
+        return await asyncio.to_thread(obj["Body"].read)
+    except Exception:  # noqa: BLE001 - missing key / client error -> absent
+        return None
+
+
 async def copy(src_key: str, dst_key: str) -> None:
     bucket = get_settings().r2_bucket_name
     await asyncio.to_thread(

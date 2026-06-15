@@ -7,13 +7,22 @@ commit pipeline (Phase B), and the PWA's optimistic status/favorite writes
 
 from __future__ import annotations
 
+import re
+
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 
+from .. import r2
 from ..db import get_conn
 from ..models import ReadStatus, Work, WorkPatch, WorkUpsert
 
 router = APIRouter(prefix="/works", tags=["works"])
+
+
+def _safe_filename(title: str | None) -> str:
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", (title or "work")).strip() or "work"
+    return name[:120] + ".epub"
 
 _COLUMNS = (
     "work_id, source, work_type, source_url, title, summary_html, short_summary, "
@@ -61,6 +70,25 @@ async def get_work(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Work not found")
     return Work(**dict(row))
+
+
+@router.get("/{work_id}/epub")
+async def work_epub(
+    work_id: int, conn: asyncpg.Connection = Depends(get_conn)
+) -> Response:
+    """Stream the work's epub (from R2), named by title at delivery (§12.1)."""
+    row = await conn.fetchrow(
+        "SELECT title, epub_r2_key FROM works WHERE work_id=$1", work_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Work not found")
+    if not row["epub_r2_key"]:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No epub for this work")
+    data = await r2.get_bytes(row["epub_r2_key"])
+    if data is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Epub object missing from R2")
+    return Response(
+        content=data, media_type="application/epub+zip",
+        headers={"Content-Disposition": f'attachment; filename="{_safe_filename(row["title"])}"'})
 
 
 @router.put("/{work_id}", response_model=Work)
