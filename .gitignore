@@ -19,6 +19,7 @@ build/
 .env
 .env.*
 !.env.example
+.railway-token
 
 # OS / editor
 .DS_Store

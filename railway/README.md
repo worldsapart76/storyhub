@@ -6,10 +6,11 @@ the dashboard PWA host. Deployed to the Railway `storyhub-api` service.
 Framework: **FastAPI** (decided 2026-06-14) — see
 [../docs/components/railway-service.md](../docs/components/railway-service.md).
 
-Spec: [../docs/components/railway-service.md](../docs/components/railway-service.md).
-Endpoint surface and tables: that doc + [../docs/data-model.md](../docs/data-model.md).
+Schema + endpoint authority: **[../docs/calibre-removal-redesign.md](../docs/calibre-removal-redesign.md)**
+§6 (data model) + §12 (operational). (data-model.md / railway-service.md are the
+superseded Calibre-era spec.)
 
-## Layout (Phase 1)
+## Layout (Phase A — redesign schema)
 
 ```
 app/
@@ -17,14 +18,20 @@ app/
   config.py          env settings (AUTH_TOKEN, DATABASE_URL, R2_*)
   auth.py            Bearer-token dependency applied to every /api route
   db.py              asyncpg pool + json codec + schema bootstrap
-  schema.sql         all tables from data-model §6.3 (idempotent)
+  schema.sql         redesign §6/§12 tables (idempotent forward CREATEs)
   models.py          Pydantic v2 request/response models + enums
   routers/           one module per endpoint group
+migrations/
+  0001_reset_to_redesign.sql   one-time teardown of the Calibre-era tables
 ```
 
-queue, status-updates, ao3-actions, snapshot, worker have full Phase-1
-implementations. reading-lists and saved-filters routes exist but return
-`501` until Phase 6 (their tables are already created).
+works, tags, groups have read+write endpoints; queue, ao3-actions, snapshot,
+worker are reshaped to the redesign schema. reading-lists and saved-filters
+routes exist but return `501` until Phase F (their tables are already created).
+
+**First-boot on the live DB:** apply `migrations/0001_reset_to_redesign.sql`
+once (clean-rebuild decision, 2026-06-15) before the redesign `schema.sql` runs.
+During development, wipe-and-recreate freely — the library reloads from Calibre.
 
 ## Running locally
 

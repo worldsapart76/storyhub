@@ -16,11 +16,13 @@ from .config import get_settings
 from .db import create_pool
 from .routers import (
     ao3_actions,
+    groups,
     queue,
     reading_lists,
     saved_filters,
     snapshot,
-    status_updates,
+    tags,
+    works,
     worker,
 )
 
@@ -47,8 +49,10 @@ async def health() -> dict[str, str]:
 # Every /api route requires a valid bearer token (docs/auth.md).
 _protected = [Depends(require_token)]
 for module in (
+    works,
+    tags,
+    groups,
     queue,
-    status_updates,
     ao3_actions,
     snapshot,
     worker,

@@ -1,0 +1,6 @@
+# Keep the deploy upload small — these never belong in the build context.
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.*
