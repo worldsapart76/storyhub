@@ -10,6 +10,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .auth import require_token
 from .config import get_settings
@@ -38,6 +39,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="StoryHub API", version="0.1.0", lifespan=lifespan)
+
+# The PWA/extension call the API cross-origin from the browser. Auth is a bearer
+# token (not cookies), so a permissive origin policy is safe for this single-user
+# app — the token, not the origin, gates access.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Snapshot-Version"],
+)
 
 
 @app.get("/health", tags=["health"])

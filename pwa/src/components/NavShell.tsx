@@ -6,8 +6,16 @@ import { NAV_ITEMS } from '../mock/data'
    §7.2). Review Queue shows its count badge and would hide at 0 in the real app.
    Responsive purely via @container so it flips inside the phone frame. */
 
-export function NavShell({ children }: { children?: ReactNode }) {
-  const [active, setActive] = useState<string>('browse')
+/* Controlled when `active`/`onNavigate` are passed (the wired App routes), else
+   self-manages (the design gallery). */
+export function NavShell({ children, active: activeProp, onNavigate }: {
+  children?: ReactNode
+  active?: string
+  onNavigate?: (id: string) => void
+}) {
+  const [internal, setInternal] = useState<string>('browse')
+  const active = activeProp ?? internal
+  const navigate = onNavigate ?? setInternal
 
   return (
     <div className="shell">
@@ -18,7 +26,7 @@ export function NavShell({ children }: { children?: ReactNode }) {
             <button
               key={item.id}
               className={'shell__nav' + (item.id === active ? ' is-active' : '')}
-              onClick={() => setActive(item.id)}
+              onClick={() => navigate(item.id)}
             >
               <span className="shell__icon" aria-hidden>{item.icon}</span>
               <span className="shell__label">{item.label}</span>
