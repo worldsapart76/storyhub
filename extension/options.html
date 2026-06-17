@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StoryHub — Setup</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="card">
+      <h1>StoryHub</h1>
+
+      <form id="setup">
+        <label for="hubUrl">Hub URL</label>
+        <input id="hubUrl" type="url" autocomplete="off" spellcheck="false" />
+
+        <label for="token">Token</label>
+        <input id="token" type="password" autocomplete="off" spellcheck="false" />
+
+        <div class="row">
+          <button id="save" type="submit">Validate &amp; Save</button>
+          <span id="result" class="result" role="status"></span>
+        </div>
+      </form>
+
+      <section class="status">
+        <div class="status__row">
+          <span>Snapshot</span>
+          <span id="snapVersion">—</span>
+        </div>
+        <div class="status__row">
+          <span>Works</span>
+          <span id="snapCount">—</span>
+        </div>
+        <div class="status__row">
+          <span>Synced</span>
+          <span id="snapSynced">—</span>
+        </div>
+        <button id="syncNow" type="button">Sync now</button>
+      </section>
+    </main>
+
+    <script src="lib/storage.js"></script>
+    <script src="lib/api.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

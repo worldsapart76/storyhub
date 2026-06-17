@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "StoryHub",
+  "version": "0.1.0",
+  "description": "AO3 capture, status badges, and sync for StoryHub (personal use).",
+  "permissions": ["storage", "alarms"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "host_permissions": [
+    "https://ffstoryhub.up.railway.app/*",
+    "https://archiveofourown.org/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "StoryHub"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  }
+}
