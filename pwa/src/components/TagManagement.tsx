@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import './TagManagement.css'
 import { useLibrary } from '../data/library'
 import {
@@ -197,6 +198,20 @@ function TagsView({ tab, setTab }: TabProps) {
     return arr
   }, [filtered, sort, counts])
 
+  // Row virtualization against the app shell's scroll container. The sticky
+  // toolbar/thead live in that same scroller, so columns stay aligned (the
+  // scrollbar narrows header and rows equally) and only the visible window
+  // renders — scales to the full ~31k-tag corpus. Heights are measured so the
+  // narrow card layout (taller rows) works too.
+  const listRef = useRef<HTMLDivElement>(null)
+  const rowV = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => (listRef.current?.closest('.shell__content') as HTMLElement | null) ?? null,
+    estimateSize: () => 46,
+    overscan: 10,
+    scrollMargin: listRef.current?.offsetTop ?? 0,
+  })
+
   // --- tag edits (optimistic + rollback) ---
   const edit = (id: number, patch: Partial<ManagedTag>, api: Parameters<typeof patchTag>[1]) => {
     const before = tagsRef.current.find((t) => t.id === id)
@@ -379,13 +394,16 @@ function TagsView({ tab, setTab }: TabProps) {
         </div>
       </div>
 
-      <div className="tm__table" role="table">
-        {sorted.map((t) => {
+      <div className="tm__table" role="table" ref={listRef} style={{ position: 'relative', height: rowV.getTotalSize() }}>
+        {rowV.getVirtualItems().map((vi) => {
+          const t = sorted[vi.index]
           const tagGroups = groupsByTag.get(t.id) ?? []
           const synN = synCountOf(t)
           const isCanon = synN > 0
           return (
-            <div key={t.id} className={'tm__row' + (selected.has(t.id) ? ' is-selected' : '')} role="row">
+            <div key={t.id} data-index={vi.index} ref={rowV.measureElement} className="tm__vrow"
+                 style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start - rowV.options.scrollMargin}px)` }}>
+            <div className={'tm__row' + (selected.has(t.id) ? ' is-selected' : '')} role="row">
               <span className="tm__td tm__col-check"><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /></span>
               <span className="tm__td tm__col-name"><span className="tm__tagname">{t.name}</span></span>
 
@@ -456,6 +474,7 @@ function TagsView({ tab, setTab }: TabProps) {
               </span>
 
               <span className="tm__td tm__col-uses" data-label="Uses">{countOf(t).toLocaleString()}</span>
+            </div>
             </div>
           )
         })}

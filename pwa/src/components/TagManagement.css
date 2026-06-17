@@ -88,7 +88,9 @@
 /* ---- Table ---- */
 /* The column header now lives in the sticky block, just above the table; borders
    join the two into one continuous table outline. */
-.tm__table { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
+.tm__table { position: relative; border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
+/* Virtual-row wrapper: positioned by the virtualizer; no gap in wide table mode. */
+.tm__vrow { box-sizing: border-box; }
 .tm__thead, .tm__row {
   display: grid;
   grid-template-columns: 32px minmax(0, 1.6fr) minmax(0, 1fr) 64px minmax(0, 0.95fr) 56px 72px minmax(0, 1.15fr) minmax(0, 1.4fr) 56px;
@@ -243,11 +245,14 @@
 @container viewport (max-width: 880px) {
   .tm__table { border: none; }
   .tm__thead { display: none; }
+  /* Gap lives on the virtual wrapper so it's included in the measured height
+     (margin would not be), keeping the virtualizer's row positions correct. */
+  .tm__vrow { padding-bottom: var(--space-2); }
   .tm__row {
     display: flex; flex-direction: column; align-items: stretch; gap: var(--space-2);
     position: relative;
     border: 1px solid var(--border); border-radius: var(--radius-md);
-    margin-bottom: var(--space-2); padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-4);
   }
   .tm__row.is-selected { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .tm__col-check { position: absolute; top: var(--space-3); right: var(--space-3); }

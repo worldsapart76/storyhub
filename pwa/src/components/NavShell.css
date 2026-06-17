@@ -44,7 +44,9 @@
 }
 .shell__theme:hover { background: var(--bg-hover); color: var(--text); }
 
-.shell__content { flex: 1; min-width: 0; overflow: auto; }
+/* position:relative so it is the offsetParent for descendant virtualized lists
+   (Tag Management measures row offsets against this scroll container). */
+.shell__content { flex: 1; min-width: 0; overflow: auto; position: relative; }
 .shell__placeholder {
   height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--space-2); color: var(--text-muted); text-align: center;
