@@ -215,3 +215,20 @@
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.55);
 }
+
+/* ---- Mobile type scale (~1.25× for readability) ----------------------------
+   The app uses the #root "viewport" container. On narrow screens bump the whole
+   px type scale; every surface + the nav read from these tokens. (#root > * so it
+   applies to both the app shell and the token gate.) The reader's BODY text is
+   adjusted separately via A−/A+. */
+@container viewport (max-width: 720px) {
+  #root > * {
+    --text-xs:   14px;
+    --text-sm:   16px;
+    --text-base: 19px;
+    --text-md:   21px;
+    --text-lg:   25px;
+    --text-xl:   33px;
+    --text-2xl:  41px;
+  }
+}

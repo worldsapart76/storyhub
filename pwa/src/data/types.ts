@@ -8,7 +8,7 @@ export type Availability = 'live' | 'deleted' | 'locked' | 'n/a'
 
 export type Category =
   | 'Fandom' | 'Relationship' | 'Character'
-  | 'Identity' | 'Universe' | 'ABO' | 'Content' | 'Trope' | 'Dynamics'
+  | 'Identity' | 'Universe' | 'Content' | 'Trope' | 'Dynamics'
   | 'Mood' | 'Structure' | 'Other' | 'Rating'
 
 export type Tag = { name: string; category: Category; grouped?: boolean; synonyms?: number }
@@ -32,6 +32,10 @@ export type Work = {
   language?: string
   dateAdded?: string
   dateRead?: string | null
+  /* Raw epoch-ms for correct chronological sort/filter; the dateAdded/dateRead
+     strings above are display-formatted and must never be compared. */
+  dateAddedTs?: number
+  dateReadTs?: number
   summary: string
   tags: Tag[]
   seriesName?: string | null

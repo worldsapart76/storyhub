@@ -143,6 +143,16 @@
   gap: var(--space-1);
   padding: var(--space-3);
 }
+
+/* Inline new-list edit card */
+.rl__card--create { outline: 2px solid var(--accent); outline-offset: -1px; }
+.rl__createname, .rl__createdesc {
+  width: 100%; border: 1px solid var(--border-strong); background: var(--bg-sunken);
+  border-radius: var(--radius-sm); padding: 6px 8px; color: var(--text); font: inherit;
+}
+.rl__createname { font-weight: var(--weight-medium); }
+.rl__createdesc { font-size: var(--text-sm); color: var(--text-secondary); }
+.rl__createname:focus, .rl__createdesc:focus { outline: none; border-color: var(--accent); }
 .rl__cardtop {
   display: flex;
   align-items: baseline;

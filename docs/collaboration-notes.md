@@ -79,7 +79,7 @@ The user chose specific names with specific intent:
 
 - **Universe** (not "AU") — chosen specifically to absorb both AU stories AND Canon Compliant. The category is "where/when the story lives in fictional space" — AU and Canon Compliant both answer that. Naming it "AU" would have excluded Canon Compliant.
 - **Content** combines sexual content AND warning-style content (Major Character Death, Graphic Violence, etc.). Combined intentionally because the user doesn't draw a meaningful distinction between them for filtering purposes.
-- **ABO** (not "Omegaverse") — chosen for brevity. Mobile UI space matters.
+- **ABO** category **removed 2026-06-16** — redundant once Identity + richer Trope/Content axes existed. A/B/O dynamics → Trope/Content; a character's alpha/omega/beta role → Identity.
 - **Other** is a *dual-purpose* sink: explicitly othered tags (user decided "this is Other") AND uncategorized fallthrough (auto-classifier wasn't confident, defaults to Other awaiting review). Both meanings coexist.
 
 ### Reading Lists (not Playlists) ([ux/reading-lists.md](ux/reading-lists.md))

@@ -70,16 +70,13 @@
 .reader__swatch--dark  { background: #15171c; }
 
 /* Reading surface */
-.reader__scroll { flex: 1; overflow: auto; }
-.reader__page {
-  margin: 0 auto; padding: var(--space-6) var(--space-4) var(--space-8);
-  font-family: var(--font-reading); line-height: var(--leading-relaxed);
+/* Stage hosts the epub.js iframe; the host is centered and width-capped. */
+.reader__stage { flex: 1; min-height: 0; position: relative; display: flex; justify-content: center; }
+.reader__epub { width: 100%; height: 100%; margin: 0 auto; }
+.reader__status {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--r-text, var(--text-muted)); font-family: var(--font-ui); font-size: var(--text-sm);
 }
-.reader__chaphead {
-  font-family: var(--font-ui); font-size: var(--text-lg); font-weight: var(--weight-medium);
-  margin-bottom: var(--space-5); color: var(--r-text);
-}
-.reader__para { margin-bottom: 1em; text-align: justify; hyphens: auto; }
 
 /* Footer nav */
 .reader__foot {
@@ -101,5 +98,18 @@
 .reader__progresslabel { display: block; font-size: var(--text-xs); color: var(--r-muted); margin-top: 3px; }
 
 @container viewport (max-width: 520px) {
-  .reader__page { padding: var(--space-4) var(--space-3) var(--space-7); }
+  .reader__epub { max-width: 100% !important; }
+}
+
+/* Screen-side tap-to-page — narrow screens only (desktop uses the footer buttons
+   + arrow keys). Side thirds page; the middle is left clear for selection/links. */
+.reader__tap { display: none; }
+@container viewport (max-width: 820px) {
+  .reader__tap {
+    display: block; position: absolute; top: 0; bottom: 0; width: 32%;
+    z-index: 5; border: none; background: transparent; padding: 0; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .reader__tap--prev { left: 0; }
+  .reader__tap--next { right: 0; }
 }

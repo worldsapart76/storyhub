@@ -34,6 +34,21 @@ CREATE TABLE IF NOT EXISTS categories (
     display_order  integer
 );
 
+-- Default freeform category set (redesign §6.3.1 + Identity ADOPTED 2026-06-14,
+-- which leads the freeform list as it sits right after the structural Character
+-- kind). Seeded ONLY when the table is empty, so curation/locking in Tag
+-- Management is never clobbered by a redeploy. tags.category FKs to these names.
+INSERT INTO categories (name, display_order)
+SELECT v.name, v.ord
+FROM (VALUES
+    ('Identity', 1), ('Universe', 2), ('Content', 3), ('Trope', 4),
+    ('Dynamics', 5), ('Mood', 6), ('Structure', 7), ('Other', 8)
+) AS v(name, ord)
+WHERE NOT EXISTS (SELECT 1 FROM categories);
+-- ABO category removed 2026-06-16: redundant once Identity + richer Trope/Content
+-- axes existed. A/B/O *dynamics* are Trope/Content; a character's alpha/omega/beta
+-- *role* is Identity. (Was display_order 3.)
+
 -- ---------------------------------------------------------------------------
 -- works — the central entity (fanfiction; potentially books). (§6.1)
 -- ---------------------------------------------------------------------------
@@ -182,6 +197,7 @@ CREATE TABLE IF NOT EXISTS reading_lists (
     cover_image_r2_key   text,                       -- 200x200 upload (only crop)
     auto_pin             boolean NOT NULL DEFAULT false,
     is_system            boolean NOT NULL DEFAULT false,
+    starred              boolean NOT NULL DEFAULT false,  -- shows as a Browse quick-chip (§6.6, mirrors saved_filters)
     membership_rule      text,                       -- e.g. 'is_favorite = true'
     display_order        integer,
     created_at           timestamptz NOT NULL DEFAULT now(),
@@ -245,7 +261,7 @@ CREATE TABLE IF NOT EXISTS ao3_actions (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     work_id     bigint NOT NULL REFERENCES works (work_id) ON DELETE CASCADE,
     action      text NOT NULL
-                  CHECK (action IN ('mark_read','bookmark','remove_bookmark')),
+                  CHECK (action IN ('mark_read','mark_for_later','bookmark','remove_bookmark')),
     params      jsonb,                               -- {private: true} for bookmark
     status      text NOT NULL DEFAULT 'pending'
                   CHECK (status IN ('pending','done','failed')),

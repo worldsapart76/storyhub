@@ -190,9 +190,12 @@ tags
                                    --    Content category absorbs these — there
                                    --    is no #all_* / freeform home for them)
   category        text  NULL       -- NULL for structural kinds; for freeform
-                                   --   (and warnings → Content):
-                                   --   Universe | ABO | Content | Trope |
+                                   --   (and warnings → Content). Curated SET in
+                                   --   the `categories` table; current default:
+                                   --   Identity | Universe | Content | Trope |
                                    --   Dynamics | Mood | Structure | Other
+                                   --   (ABO removed 2026-06-16 — dynamics→Trope/
+                                   --   Content, alpha/omega role→Identity)
   state           enum             -- favorite | normal | excluded
   auto_classified bool
   updated_at      timestamptz
@@ -386,6 +389,12 @@ wipe-and-recreate from Calibre until go-live).
    table is gone). It flattens onto the card in the §12.3 projection, so it lives
    on the work row. (Revisit if pin state ever needs to be device-scoped rather
    than global.)
+
+4. **`reading_lists.starred boolean`** (added 2026-06-16, Phase F). §6.4 left this
+   off, but the prototype stars reading lists to surface them as Browse quick-chips
+   (alongside starred `saved_filters`). Added a `starred boolean NOT NULL DEFAULT
+   false` column mirroring `saved_filters.starred`, rather than overloading
+   `display_order`. The system "Favorites" list is always-starred in the UI.
 
 Also realized: `snapshot_versions` carries an explicit `format_version` column
 (§12.3's structure version) alongside the content `version`.
@@ -612,8 +621,15 @@ extension is what reaches AO3 (the app has no AO3 session).
 | Read | `read_status=Read` + `date_read` | marked read |
 | DNF | `read_status=DNF` | marked read |
 | Favorite | `is_favorite=true` + `read_status=Read` + `date_read` | marked read **+ private bookmark** |
-| Un-favorite | `is_favorite=false` (read state unchanged) | bookmark removed |
-| Unread | never written | never synced (hard rule) |
+| Un-favorite | `is_favorite=false` (read state unchanged) | bookmark removed — **app guards with an "are you sure?"** (curated bookmarks; un-favorite is the only AO3-destructive app action) |
+| Unread | `read_status=Unread` — **allowed as a deliberate app correction** | **Mark for Later** (re-marks for later; AO3's Read↔MfL toggle) |
+
+> **Unread amended (2026-06-16).** Originally "never written." Revised: AO3's
+> *Mark for Later* ↔ *Mark as Read* is a real toggle, so Unread is a legitimate,
+> syncable state when set deliberately in the app/extension (enqueues
+> `mark_for_later`). The original protection — never *clobber* a deliberate
+> Read/DNF/Favorite back to Unread — now lives on **import only** (fresh imports
+> default to Unread; sync never PATCHes Unread), not as a blanket write ban.
 
 Bookmarks are **always private** — baked into the action, never a user choice.
 Note `is_favorite` stays *schema-orthogonal* to `read_status` (the column can
@@ -646,7 +662,7 @@ native click.
 ao3_actions
   id          PK
   work_id     fk -> works
-  action      enum   -- mark_read | bookmark | remove_bookmark
+  action      enum   -- mark_read | mark_for_later | bookmark | remove_bookmark
   params      jsonb  -- {private: true} for bookmark
   status      enum   -- pending | done | failed
   created_at, done_at  timestamptz

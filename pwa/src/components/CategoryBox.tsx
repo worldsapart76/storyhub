@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import './CategoryBox.css'
 import { FilterChip, nextChipState, type ChipState } from './FilterChip'
 import type { TagOption } from '../mock/data'
+import type { CatFilter } from '../data/filters'
 
 /* One Browse filter category (browse.md §7.3.2 + the favorite/search-to-add model).
 
@@ -17,28 +18,41 @@ export function CategoryBox({
   category,
   tags,
   defaultOpen = true,
+  value,
+  onChange,
 }: {
   category: string
   tags: TagOption[]
   defaultOpen?: boolean
+  /* Controlled mode (BrowseView): the include/exclude states + OR/AND mode are
+     owned by the parent's FilterState. Favorites/session/search stay local
+     (display concerns). Omit both to run uncontrolled — the gallery does. */
+  value?: CatFilter
+  onChange?: (next: CatFilter) => void
 }) {
   const [open, setOpen] = useState(defaultOpen)
-  const [mode, setMode] = useState<'OR' | 'AND'>('OR')
+  const [localMode, setLocalMode] = useState<'OR' | 'AND'>('OR')
   const [query, setQuery] = useState('')
-  const [states, setStates] = useState<Record<string, ChipState>>({})
+  const [localStates, setLocalStates] = useState<Record<string, ChipState>>({})
   const [favorites, setFavorites] = useState<Record<string, boolean>>(
     () => Object.fromEntries(tags.filter((t) => t.favorite).map((t) => [t.name, true])),
   )
   const [session, setSession] = useState<string[]>([]) // session-added tag names
 
+  const controlled = !!onChange
+  const states = controlled ? value?.states ?? {} : localStates
+  const mode = controlled ? value?.mode ?? 'OR' : localMode
+
   const byName = useMemo(() => new Map(tags.map((t) => [t.name, t])), [tags])
 
-  // Visible = favorited + session-added (favorited first by count). No seeding.
+  // Visible = favorited + session-added + any tag with an active state (so a
+  // searched-then-set chip stays visible). Favorited first by count. No seeding.
   const visible = useMemo(() => {
     const favd = tags.filter((t) => favorites[t.name]).sort((a, b) => b.count - a.count).map((t) => t.name)
-    const sess = session.filter((n) => !favorites[n])
-    return [...favd, ...sess]
-  }, [tags, favorites, session])
+    const active = Object.entries(states).filter(([, s]) => s !== 'default').map(([n]) => n)
+    const extra = [...session, ...active].filter((n, i, arr) => arr.indexOf(n) === i && !favd.includes(n))
+    return [...favd, ...extra]
+  }, [tags, favorites, session, states])
 
   const suggestions = useMemo(() => {
     if (!query.trim()) return []
@@ -50,16 +64,28 @@ export function CategoryBox({
       .slice(0, 8)
   }, [query, tags, visible])
 
+  const setStatesBoth = (updater: (p: Record<string, ChipState>) => Record<string, ChipState>) => {
+    if (controlled) onChange!({ states: updater(states), mode })
+    else setLocalStates(updater)
+  }
+  const setModeBoth = (m: 'OR' | 'AND') => {
+    if (controlled) onChange!({ states, mode: m })
+    else setLocalMode(m)
+  }
+
   const cycle = (name: string) =>
-    setStates((p) => ({ ...p, [name]: nextChipState(p[name] ?? 'default') }))
+    setStatesBoth((p) => ({ ...p, [name]: nextChipState(p[name] ?? 'default') }))
   const toggleFavorite = (name: string) => setFavorites((p) => ({ ...p, [name]: !p[name] }))
   const addSession = (name: string) => {
+    // Searching + picking a tag means you want it ON — auto-include it (it stays
+    // in the box if later unselected, until manually removed via × or a refresh).
     setSession((s) => (s.includes(name) ? s : [...s, name]))
+    setStatesBoth((p) => ({ ...p, [name]: 'include' }))
     setQuery('')
   }
   const removeSession = (name: string) => {
     setSession((s) => s.filter((n) => n !== name))
-    setStates((p) => ({ ...p, [name]: 'default' }))
+    setStatesBoth((p) => ({ ...p, [name]: 'default' }))
   }
 
   const activeCount = Object.values(states).filter((s) => s !== 'default').length
@@ -74,7 +100,7 @@ export function CategoryBox({
         </button>
         <button
           className={'catbox__mode catbox__mode--' + mode.toLowerCase()}
-          onClick={() => setMode((m) => (m === 'OR' ? 'AND' : 'OR'))}
+          onClick={() => setModeBoth(mode === 'OR' ? 'AND' : 'OR')}
           title={mode === 'OR' ? 'Any (OR) — tap for All (AND)' : 'All (AND) — tap for Any (OR)'}
         >
           {mode}

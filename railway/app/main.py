@@ -8,15 +8,18 @@ static host is added in a later phase.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .auth import require_token
 from .config import get_settings
 from .db import create_pool
 from .routers import (
     ao3_actions,
+    categories,
     groups,
     queue,
     reading_lists,
@@ -64,6 +67,7 @@ for module in (
     works,
     tags,
     groups,
+    categories,
     queue,
     ao3_actions,
     snapshot,
@@ -72,3 +76,11 @@ for module in (
     saved_filters,
 ):
     app.include_router(module.router, prefix="/api", dependencies=_protected)
+
+
+# Serve the built PWA same-origin (built into railway/web by `vite build`). Mounted
+# LAST so /api/*, /health, and /docs win; html=True serves index.html at "/".
+# Guarded so the API still boots if the PWA hasn't been built into the image.
+_web = Path(__file__).resolve().parent.parent / "web"
+if _web.is_dir():
+    app.mount("/", StaticFiles(directory=str(_web), html=True), name="web")

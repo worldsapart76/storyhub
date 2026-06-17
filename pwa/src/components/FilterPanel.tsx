@@ -1,27 +1,37 @@
 import { useState } from 'react'
 import './FilterPanel.css'
-import { FilterChip, nextChipState, type ChipState } from './FilterChip'
+import { FilterChip, nextChipState } from './FilterChip'
 import { CategoryBox } from './CategoryBox'
-import { TAG_CATEGORIES, RATINGS, AUTHORS, WORDCOUNT_BUCKETS, type ReadStatus, type Rating } from '../mock/data'
+import {
+  WORDCOUNT_BUCKETS, emptyCatFilter, activeCount,
+  type CatFilter, type Facets, type FilterState,
+} from '../data/filters'
+import type { Rating, ReadStatus } from '../data/types'
 
 const STATUSES: ReadStatus[] = ['Unread', 'Read', 'DNF']
+const RATINGS: Rating[] = ['General', 'Teen', 'Mature', 'Explicit', 'Not Rated']
 const RATING_SHORT: Record<Rating, string> = { General: 'G', Teen: 'T', Mature: 'M', Explicit: 'E', 'Not Rated': 'NR' }
 
-/* The Browse filter surface (browse.md). Docked on desktop / drawer on mobile —
-   the parent (BrowseView) owns placement and the open/close toggle, so there's
-   no close button here. Reading-list membership lives in the main Reading Lists
-   surface, not here. Saved filters are CREATED here (Save filter, next to Clear
-   all) — where the filters are live — and edited on the Saved Filters surface. */
-export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, starred: boolean) => void }) {
-  const [status, setStatus] = useState<Record<string, ChipState>>({})
-  const [rating, setRating] = useState<Record<string, ChipState>>({})
-  const [favorite, setFavorite] = useState(false)
-  const [buckets, setBuckets] = useState<Set<string>>(new Set()) // multi-select (OR)
-  const [authorQuery, setAuthorQuery] = useState('')
-  const [authors, setAuthors] = useState<string[]>([])
+/* The Browse filter surface (browse.md). Controlled by BrowseView: `value` is the
+   live FilterState, `facets` are the real tag categories + authors derived from
+   the loaded library. Docked on desktop / drawer on mobile — the parent owns
+   placement and the open/close toggle, so there's no close button here. Saved
+   filters are CREATED here (Save filter), edited on the Saved Filters surface. */
+export function FilterPanel({
+  value,
+  onChange,
+  facets,
+  onSaveFilter,
+}: {
+  value: FilterState
+  onChange: (next: FilterState) => void
+  facets: Facets
+  onSaveFilter?: (name: string, starred: boolean) => void
+}) {
   const [saving, setSaving] = useState(false)
   const [saveName, setSaveName] = useState('')
   const [saveStar, setSaveStar] = useState(true)
+  const [authorQuery, setAuthorQuery] = useState('')
 
   const doSave = () => {
     const name = saveName.trim()
@@ -30,17 +40,23 @@ export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, st
     setSaving(false); setSaveName(''); setSaveStar(true)
   }
 
-  const cycle = (set: typeof setStatus) => (name: string) =>
-    set((p) => ({ ...p, [name]: nextChipState(p[name] ?? 'default') }))
+  const cycleStatus = (name: string) =>
+    onChange({ ...value, status: { ...value.status, [name]: nextChipState(value.status[name] ?? 'default') } })
+  const cycleRating = (name: string) =>
+    onChange({ ...value, rating: { ...value.rating, [name]: nextChipState(value.rating[name] ?? 'default') } })
   const toggleBucket = (b: string) =>
-    setBuckets((prev) => {
-      const next = new Set(prev)
-      next.has(b) ? next.delete(b) : next.add(b)
-      return next
-    })
+    onChange({ ...value, buckets: value.buckets.includes(b) ? value.buckets.filter((x) => x !== b) : [...value.buckets, b] })
+  const setCat = (category: string, next: CatFilter) =>
+    onChange({ ...value, tags: { ...value.tags, [category]: next } })
+  const addAuthor = (a: string) => {
+    if (!value.authors.includes(a)) onChange({ ...value, authors: [...value.authors, a] })
+    setAuthorQuery('')
+  }
+  const removeAuthor = (a: string) =>
+    onChange({ ...value, authors: value.authors.filter((x) => x !== a) })
 
   const authorMatches = authorQuery.trim()
-    ? AUTHORS.filter((a) => a.toLowerCase().includes(authorQuery.toLowerCase()) && !authors.includes(a)).slice(0, 6)
+    ? facets.authors.filter((a) => a.toLowerCase().includes(authorQuery.toLowerCase()) && !value.authors.includes(a)).slice(0, 6)
     : []
 
   return (
@@ -79,7 +95,11 @@ export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, st
               </>
             )}
           </div>
-          <button className="fpanel__clear">Clear all</button>
+          <button
+            className="fpanel__clear"
+            disabled={activeCount(value) === 0}
+            onClick={() => onChange({ status: {}, favorite: false, rating: {}, buckets: [], wordMin: '', wordMax: '', tags: {}, authors: [] })}
+          >Clear all</button>
         </div>
       </header>
 
@@ -88,16 +108,20 @@ export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, st
         <div className="fpanel__quick">
           <Row label="Status">
             {STATUSES.map((s) => (
-              <FilterChip key={s} label={s} state={status[s] ?? 'default'} onCycle={() => cycle(setStatus)(s)} />
+              <FilterChip key={s} label={s} state={value.status[s] ?? 'default'} onCycle={() => cycleStatus(s)} />
             ))}
-            <button className={'fpanel__favtoggle' + (favorite ? ' is-on' : '')} aria-pressed={favorite} onClick={() => setFavorite((f) => !f)}>
-              {favorite ? '★' : '☆'}
+            <button
+              className={'fpanel__favtoggle' + (value.favorite ? ' is-on' : '')}
+              aria-pressed={value.favorite}
+              onClick={() => onChange({ ...value, favorite: !value.favorite })}
+            >
+              {value.favorite ? '★' : '☆'}
             </button>
           </Row>
 
           <Row label="Words">
             {WORDCOUNT_BUCKETS.map((b) => (
-              <button key={b} className={'fpanel__bucket' + (buckets.has(b) ? ' is-on' : '')} onClick={() => toggleBucket(b)}>
+              <button key={b} className={'fpanel__bucket' + (value.buckets.includes(b) ? ' is-on' : '')} onClick={() => toggleBucket(b)}>
                 {b}
               </button>
             ))}
@@ -105,15 +129,22 @@ export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, st
 
           <Row label="Rating">
             {RATINGS.map((r) => (
-              <FilterChip key={r} label={RATING_SHORT[r]} state={rating[r] ?? 'default'} onCycle={() => cycle(setRating)(r)} />
+              <FilterChip key={r} label={RATING_SHORT[r]} state={value.rating[r] ?? 'default'} onCycle={() => cycleRating(r)} />
             ))}
           </Row>
         </div>
 
         <div className="fpanel__divider" />
 
-        {TAG_CATEGORIES.map(({ category, tags }) => (
-          <CategoryBox key={category} category={category} tags={tags} defaultOpen={false} />
+        {facets.categories.map(({ category, tags }) => (
+          <CategoryBox
+            key={category}
+            category={category}
+            tags={tags}
+            defaultOpen={false}
+            value={value.tags[category] ?? emptyCatFilter()}
+            onChange={(next) => setCat(category, next)}
+          />
         ))}
 
         <div className="fpanel__divider" />
@@ -121,28 +152,21 @@ export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, st
         {/* Precise / less-frequent refinements */}
         <Section title="Word count (precise)">
           <div className="fpanel__range">
-            <input type="number" placeholder="Min" /> <span>–</span> <input type="number" placeholder="Max" />
-          </div>
-        </Section>
-
-        <Section title="Dates">
-          <div className="fpanel__daterange">
-            <span className="fpanel__rangelabel">Read</span>
-            <input type="date" aria-label="Read after" /> <span>–</span> <input type="date" aria-label="Read before" />
-          </div>
-          <div className="fpanel__daterange">
-            <span className="fpanel__rangelabel">Added</span>
-            <input type="date" aria-label="Added after" /> <span>–</span> <input type="date" aria-label="Added before" />
+            <input type="number" placeholder="Min" value={value.wordMin}
+                   onChange={(e) => onChange({ ...value, wordMin: e.target.value })} />
+            <span>–</span>
+            <input type="number" placeholder="Max" value={value.wordMax}
+                   onChange={(e) => onChange({ ...value, wordMax: e.target.value })} />
           </div>
         </Section>
 
         <Section title="Author">
-          {authors.length > 0 && (
+          {value.authors.length > 0 && (
             <div className="fpanel__authorchips">
-              {authors.map((a) => (
+              {value.authors.map((a) => (
                 <span key={a} className="fpanel__authorchip">
                   {a}
-                  <button onClick={() => setAuthors((p) => p.filter((x) => x !== a))} aria-label={`Remove ${a}`}>×</button>
+                  <button onClick={() => removeAuthor(a)} aria-label={`Remove ${a}`}>×</button>
                 </span>
               ))}
             </div>
@@ -151,7 +175,7 @@ export function FilterPanel({ onSaveFilter }: { onSaveFilter?: (name: string, st
           {authorMatches.length > 0 && (
             <div className="fpanel__suggest">
               {authorMatches.map((a) => (
-                <button key={a} className="fpanel__suggestitem" onClick={() => { setAuthors((p) => [...p, a]); setAuthorQuery('') }}>{a}</button>
+                <button key={a} className="fpanel__suggestitem" onClick={() => addAuthor(a)}>{a}</button>
               ))}
             </div>
           )}

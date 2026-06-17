@@ -75,9 +75,11 @@
 }
 .browse__banner button { border: none; background: transparent; color: inherit; text-decoration: underline; font-size: var(--text-sm); margin-left: auto; }
 
-.browse__count { font-size: var(--text-sm); color: var(--text-muted); }
+.browse__count { font-size: var(--text-sm); color: var(--text-muted); margin-bottom: var(--space-3); }
 .browse__bulk { margin-bottom: var(--space-3); }
-.browse__list { display: flex; flex-direction: column; gap: var(--space-3); }
+/* Rows are absolutely positioned by the virtualizer (inter-card gap comes from
+   each row's measured paddingBottom), so flex/gap here would be inert. */
+.browse__list { position: relative; }
 
 /* ---- Filter panel ---- */
 /* Narrow default: slide-in drawer (off-canvas, clipped by body overflow:hidden). */
@@ -90,13 +92,14 @@
 .browse__panel.is-open { transform: translateX(0); }
 .browse__scrim { position: absolute; inset: 0; background: rgba(0,0,0,0.35); z-index: 15; }
 
-/* Wide: docked in flow when open; fully removed (no width, no scroll) when closed. */
-@container viewport (min-width: 880px) {
-  .browse__panel {
-    position: static; transform: none; box-shadow: none; z-index: auto;
-    width: var(--filter-panel-w); flex: none; height: auto;
-    transition: none;
-  }
-  .browse__panel:not(.is-open) { display: none; }
-  .browse__scrim { display: none; }
+/* Wide (desktop): the panel docks IN FLOW so the results column flows around it,
+   rather than the drawer overlaying. Driven by the JS `is-wide` class (measured on
+   the browse pane) so it doesn't depend on an ancestor @container being present —
+   the wired app shell doesn't establish one. Closed = fully removed (no width). */
+.browse.is-wide .browse__panel {
+  position: static; transform: none; box-shadow: none; z-index: auto;
+  width: var(--filter-panel-w); flex: none; height: auto;
+  transition: none;
 }
+.browse.is-wide .browse__panel:not(.is-open) { display: none; }
+.browse.is-wide .browse__scrim { display: none; }

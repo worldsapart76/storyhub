@@ -151,16 +151,13 @@ async def upsert_work(
 async def patch_work(
     work_id: int, patch: WorkPatch, conn: asyncpg.Connection = Depends(get_conn)
 ) -> Work:
-    """Partial update — optimistic status/favorite writes (Phase F)."""
+    """Partial update — deliberate status/favorite writes from the PWA/extension
+    (Phase F). Unread IS allowed here: PATCH is always a deliberate user action
+    (re-marks for later on AO3 in Phase E). The "never clobber to Unread" rule is
+    enforced on IMPORT (fresh-only default), not on this deliberate path."""
     fields = patch.model_dump(exclude_unset=True)
     if not fields:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No fields to update")
-    # Hard rule: never write 'Unread' from any source (it's the device default).
-    if fields.get("read_status") == ReadStatus.unread:
-        raise HTTPException(
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
-            "read_status 'Unread' may not be written (hard rule)",
-        )
     sets: list[str] = []
     params: list[object] = []
     for key, value in fields.items():

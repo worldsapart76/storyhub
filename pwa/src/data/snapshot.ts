@@ -36,3 +36,39 @@ export async function loadSnapshotDb(force = false): Promise<LoadedSnapshot> {
   const sql = await getSql()
   return { db: new sql.Database(new Uint8Array(bytes)), version }
 }
+
+/* Snapshot rebuild + "pending" tracking. Curation that changes the projection
+   (tag category / exclude / synonym / group, category set) only reaches Browse
+   after a rebuild — so Tag Management marks the snapshot dirty on those writes and
+   offers an in-app rebuild, instead of relying on the user to remember / a CLI.
+   The flag is localStorage-backed so it survives tab switches and reloads. */
+const DIRTY_KEY = 'storyhub.snapshotDirty'
+const DIRTY_EVT = 'storyhub-snapshot-dirty'
+
+export const isSnapshotDirty = (): boolean => localStorage.getItem(DIRTY_KEY) === '1'
+
+export function markSnapshotDirty(): void {
+  if (isSnapshotDirty()) return
+  localStorage.setItem(DIRTY_KEY, '1')
+  window.dispatchEvent(new Event(DIRTY_EVT))
+}
+
+export function clearSnapshotDirty(): void {
+  if (!isSnapshotDirty()) return
+  localStorage.removeItem(DIRTY_KEY)
+  window.dispatchEvent(new Event(DIRTY_EVT))
+}
+
+export function onSnapshotDirtyChange(cb: () => void): () => void {
+  window.addEventListener(DIRTY_EVT, cb)
+  return () => window.removeEventListener(DIRTY_EVT, cb)
+}
+
+/* Rebuild the snapshot from current Postgres state (Railway re-projects + bumps
+   the version). Clears the dirty flag on success; the caller reloads the library
+   so the new version is fetched. */
+export async function rebuildSnapshot(): Promise<void> {
+  const res = await fetch(`${getHub()}/api/snapshot/build`, { method: 'POST', headers: authHeaders() })
+  if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => '')}`.trim())
+  clearSnapshotDirty()
+}

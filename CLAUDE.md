@@ -101,7 +101,8 @@ The missing context might be load-bearing.
 - DO NOT reintroduce Calibre into the pipeline — Railway Postgres is the source of truth. Calibre is a read-only break-glass inspector + one-time migration source only (if ever queried, REST not `calibredb`).
 - DO NOT use FanFicFare — removed entirely (no first-fetch, no update detection; only complete works are ever added).
 - DO NOT bypass the per-work Review Queue when assigning the **primary ship / primary collection** roles. Tag grouping/synonym/category curation lives in Tag Management, never the Review Queue. (redesign §12.1, §12.6)
-- DO NOT sync or write `"Unread"` from any source — it's the device default, not a deliberate state.
+- DO NOT let import/sync **clobber** a deliberate `Read`/`DNF`/`Favorite` back to `"Unread"` — Unread is the fresh-import default, applied only to fresh imports. (Amended 2026-06-16: Unread MAY be set as a *deliberate* app/extension correction, which enqueues a `mark_for_later` AO3 action — AO3's Read↔Mark-for-Later toggle. See redesign §12.2.)
+- DO guard the **story** un-favorite (★ on a story) with a confirm — it removes the AO3 bookmark (the only AO3-destructive app action). Reading-list / saved-filter / tag stars are app-only and need no guard.
 - DO NOT change the XTEINK folder structure or filename format — Crosspoint indexes by content hash; structure changes orphan caches. See docs/lifted-from-fff/xteink-transfer.md, redesign §12.5.
 - DO NOT change tag categories after "Lock category list" without a code change (the `categories` table; redesign §12.6).
 - DO NOT depart from the adopted schema (redesign §6, §12) without flagging it — that schema, not Calibre's columns, is the source of truth.

@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import './StoryCard.css'
 import { type Work, type Tag, type Category, type ReadStatus, fmtWords } from '../mock/data'
 import { StatusBadge, RatingBadge, FavoriteStar, AvailabilityNote } from './Badge'
 import { StatusCluster } from './StatusCluster'
 import { Button } from './Button'
+import { openEpub, openAo3 } from '../data/epub'
+import { addListMembers, createReadingList, fetchReadingLists, type ReadingListRow } from '../data/lists'
 
 /* Cross-cutting result card (browse.md "Result card content" + B+ series model).
    Used in Browse, Reading List detail, Saved Filter results, search.
@@ -19,7 +21,7 @@ const MAX_INLINE_TAGS = 6
 
 // Category render order for the expanded grouped view (browse.md §7.3.1).
 const CATEGORY_ORDER: Category[] = [
-  'Fandom', 'Relationship', 'Character', 'Identity', 'Universe', 'ABO', 'Content',
+  'Fandom', 'Relationship', 'Character', 'Identity', 'Universe', 'Content',
   'Trope', 'Dynamics', 'Mood', 'Structure', 'Other', 'Rating',
 ]
 
@@ -30,6 +32,10 @@ export function StoryCard({
   nested,
   onSelect,
   onRead,
+  onFavorite,
+  onPin,
+  onStatus,
+  canAddToList,
 }: {
   work: Work
   selectable?: boolean
@@ -39,14 +45,44 @@ export function StoryCard({
   /** Launch the in-app reader (§5 fallback). When omitted, the action is hidden —
       "Open EPUB" alone hands the file to the OS reader. */
   onRead?: () => void
+  /** Persisting handlers (wired in Browse). When passed, the control is CONTROLLED
+      by the `work` prop (the provider's optimistic state); when omitted, the card
+      falls back to local-only toggles (the design gallery). */
+  onFavorite?: (next: boolean) => void
+  onPin?: (next: boolean) => void
+  onStatus?: (next: ReadStatus) => void
+  /** Enable the "+ List" add-to-list menu (real app only; the gallery omits it). */
+  canAddToList?: boolean
 }) {
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [seriesOpen, setSeriesOpen] = useState(false)
   const [openSibling, setOpenSibling] = useState<number | null>(null)
-  const [fav, setFav] = useState(work.isFavorite)
-  const [pinned, setPinned] = useState(work.pinned)
-  const [status, setStatus] = useState<ReadStatus>(work.readStatus)
+  const [localFav, setLocalFav] = useState(work.isFavorite)
+  const [localPinned, setLocalPinned] = useState(work.pinned)
+  const [localStatus, setLocalStatus] = useState<ReadStatus>(work.readStatus)
+  const [epubBusy, setEpubBusy] = useState(false)
+
+  // Controlled by the work prop when a persisting handler is wired, else local.
+  const fav = onFavorite ? work.isFavorite : localFav
+  const pinned = onPin ? work.pinned : localPinned
+  const status = onStatus ? work.readStatus : localStatus
+  // Un-favoriting a story removes its private AO3 bookmark (final state), so guard
+  // it. Favoriting (adding) and the local/gallery toggle need no confirm.
+  const toggleFav = () => {
+    if (!onFavorite) { setLocalFav((f) => !f); return }
+    if (fav && !window.confirm(`Remove “${work.title}” from favorites? This also removes its AO3 bookmark.`)) return
+    onFavorite(!fav)
+  }
+  const togglePin = () => (onPin ? onPin(!pinned) : setLocalPinned((p) => !p))
+  const changeStatus = (s: ReadStatus) => (onStatus ? onStatus(s) : setLocalStatus(s))
+
+  const onEpub = async () => {
+    setEpubBusy(true)
+    const err = await openEpub(work)
+    setEpubBusy(false)
+    if (err) alert(err)
+  }
 
   const inline = work.tags.slice(0, MAX_INLINE_TAGS)
   const extra = work.tags.length - MAX_INLINE_TAGS
@@ -76,7 +112,7 @@ export function StoryCard({
             <h3 className="card__title">{work.title}</h3>
             <div className="card__byline">by {work.authors.join(', ')}</div>
           </div>
-          <FavoriteStar on={fav} onClick={() => setFav((f) => !f)} />
+          <FavoriteStar on={fav} onClick={toggleFav} />
         </div>
 
         <div className="card__meta">
@@ -143,15 +179,16 @@ export function StoryCard({
         {/* Action row — work-level quick actions (full set lives in reading flow). */}
         {!nested && (
           <div className="card__actions">
-            <Button variant="primary" size="sm" title="Open in your device's default reader">EPUB</Button>
+            <Button variant="primary" size="sm" title="Open in your device's default reader"
+                    onClick={onEpub} disabled={epubBusy}>{epubBusy ? '…' : 'EPUB'}</Button>
             {work.availability === 'live' && (
-              <Button variant="outline" size="sm">AO3</Button>
+              <Button variant="outline" size="sm" onClick={() => openAo3(work)}>AO3</Button>
             )}
             {onRead && (
               <Button variant="secondary" size="sm" onClick={onRead} title="Read in the built-in reader">Read here</Button>
             )}
-            <StatusCluster status={status} compact hideFavorite onStatus={setStatus} />
-            <Button variant="secondary" size="sm">+ List</Button>
+            <StatusCluster status={status} compact hideFavorite onStatus={changeStatus} />
+            <AddToList work={work} enabled={canAddToList} />
           </div>
         )}
 
@@ -202,12 +239,73 @@ export function StoryCard({
           className={'card__pin' + (pinned ? ' is-on' : '')}
           title={pinned ? 'Pinned offline' : 'Pin for offline'}
           aria-pressed={pinned}
-          onClick={() => setPinned((p) => !p)}
+          onClick={togglePin}
         >
           {pinned ? '📌' : '📍'}
         </button>
       )}
     </article>
+  )
+}
+
+/* "+ List" add-to-list menu. Lazily loads the user's lists on first open; lets you
+   pick one or create-and-add. Inert (no menu) when `enabled` is false (gallery). */
+function AddToList({ work, enabled }: { work: Work; enabled?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const [lists, setLists] = useState<ReadingListRow[] | null>(null)
+  const [creating, setCreating] = useState(false)
+  const [added, setAdded] = useState<string | null>(null)
+  const done = useRef(false)
+
+  const openMenu = () => {
+    if (!enabled) return
+    setOpen(true)
+    if (!lists) fetchReadingLists().then((ls) => setLists(ls.filter((l) => !l.isSystem))).catch(() => setLists([]))
+  }
+  const close = () => { setOpen(false); setCreating(false) }
+  const flash = (name: string) => { setAdded(name); setTimeout(() => setAdded(null), 1500) }
+  const add = (listId: string, name: string) => {
+    close()
+    addListMembers(listId, [work.workId]).then(() => flash(name)).catch((e) => alert(`Couldn’t add: ${e instanceof Error ? e.message : e}`))
+  }
+  const createAndAdd = (raw: string) => {
+    if (done.current) return
+    done.current = true
+    const n = raw.trim()
+    close()
+    if (!n) return
+    createReadingList({ name: n, starred: false })
+      .then((row) => addListMembers(row.id, [work.workId]))
+      .then(() => flash(n))
+      .catch((e) => alert(`Couldn’t create list: ${e instanceof Error ? e.message : e}`))
+  }
+
+  return (
+    <div className="card__listwrap">
+      <Button variant="secondary" size="sm" onClick={openMenu}>{added ? `✓ ${added}` : '+ List'}</Button>
+      {open && (
+        <>
+          <div className="card__listscrim" onClick={close} />
+          <ul className="card__listmenu" role="menu">
+            {lists === null && <li className="card__listempty">Loading…</li>}
+            {lists?.map((l) => (
+              <li key={l.id}><button className="card__listitem" onClick={() => add(l.id, l.name)}>{l.name}</button></li>
+            ))}
+            {lists && lists.length === 0 && <li className="card__listempty">No lists yet</li>}
+            <li>
+              {creating ? (
+                <input className="card__listnew" autoFocus placeholder="New list…"
+                  onFocus={() => { done.current = false }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') createAndAdd(e.currentTarget.value); if (e.key === 'Escape') close() }}
+                  onBlur={(e) => createAndAdd(e.target.value)} />
+              ) : (
+                <button className="card__listitem card__listitem--new" onClick={() => { done.current = false; setCreating(true) }}>+ New list…</button>
+              )}
+            </li>
+          </ul>
+        </>
+      )}
+    </div>
   )
 }
 

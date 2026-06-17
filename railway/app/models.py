@@ -87,6 +87,7 @@ class QueueState(str, Enum):
 
 class AO3ActionType(str, Enum):
     mark_read = "mark_read"
+    mark_for_later = "mark_for_later"   # AO3's "Mark for Later" = back to Unread (toggles off Read)
     bookmark = "bookmark"
     remove_bookmark = "remove_bookmark"
 
@@ -230,6 +231,36 @@ class TagGroup(BaseModel):
     member_tag_ids: list[int] = []
 
 
+# --- categories (the freeform category SET + global lock; §12.6) --------------
+
+class Category(BaseModel):
+    id: int
+    name: str
+    display_order: int | None = None
+
+
+class CategoryCreate(BaseModel):
+    name: str
+
+
+class CategoryRename(BaseModel):
+    name: str
+
+
+class CategoryReorder(BaseModel):
+    ids: list[int]
+
+
+class CategoryLock(BaseModel):
+    locked: bool
+
+
+class CategoryList(BaseModel):
+    """The ordered category set plus the single global lock state (§12.6)."""
+    categories: list[Category] = []
+    locked: bool = False
+
+
 # --- capture payload + normalization proposals (§12.1) -----------------------
 
 class RawCapture(BaseModel):
@@ -361,3 +392,78 @@ class WorkerStatus(BaseModel):
     last_seen_at: datetime
     alive: bool
     recent_log_lines: list[str] | None = None
+
+
+# --- reading_lists (§6.4) ----------------------------------------------------
+
+class ReadingListCreate(BaseModel):
+    name: str
+    description: str | None = None
+    color: str | None = None
+    auto_pin: bool = False
+    starred: bool = False
+
+
+class ReadingListPatch(BaseModel):
+    """Partial update. is_system/membership_rule are not user-editable here."""
+    name: str | None = None
+    description: str | None = None
+    color: str | None = None
+    cover_image_r2_key: str | None = None
+    auto_pin: bool | None = None
+    starred: bool | None = None
+    display_order: int | None = None
+
+
+class ReadingList(BaseModel):
+    id: UUID
+    name: str
+    description: str | None = None
+    color: str | None = None
+    cover_image_r2_key: str | None = None
+    auto_pin: bool
+    is_system: bool
+    starred: bool
+    membership_rule: str | None = None
+    display_order: int | None = None
+    member_ids: list[int] = []
+    created_at: datetime
+    updated_at: datetime
+
+
+class ReadingListMembers(BaseModel):
+    """Add/remove works in a list (idempotent add; remove ignores absent)."""
+    work_ids: list[int]
+
+
+class ReadingListOrder(BaseModel):
+    """Replace the full member ordering (Manual sort drag-and-drop)."""
+    work_ids: list[int]
+
+
+# --- saved_filters (§6.5) ----------------------------------------------------
+
+class SavedFilterCreate(BaseModel):
+    name: str
+    filter_state_json: dict | None = None
+    sort_state_json: dict | None = None
+    starred: bool = False
+
+
+class SavedFilterPatch(BaseModel):
+    name: str | None = None
+    filter_state_json: dict | None = None
+    sort_state_json: dict | None = None
+    starred: bool | None = None
+    display_order: int | None = None
+
+
+class SavedFilter(BaseModel):
+    id: UUID
+    name: str
+    filter_state_json: dict | None = None
+    sort_state_json: dict | None = None
+    starred: bool
+    display_order: int | None = None
+    created_at: datetime
+    updated_at: datetime

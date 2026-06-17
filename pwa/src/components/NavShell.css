@@ -26,6 +26,24 @@
   min-width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
 }
 
+/* Pending-sync indicator + theme toggle, pinned to the bottom of the rail. The
+   first one with margin-top:auto consumes the free space; both set it so whichever
+   renders first floats the group down. */
+.shell__pending {
+  margin-top: auto;
+  display: flex; align-items: center; gap: 6px;
+  padding: var(--space-2) var(--space-3); font-size: var(--text-xs);
+  color: var(--accent);
+}
+.shell__theme {
+  margin-top: auto;
+  display: flex; align-items: center; gap: var(--space-3);
+  border: none; background: transparent; color: var(--text-secondary);
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  font-size: var(--text-sm); text-align: left; min-height: var(--tap-target);
+}
+.shell__theme:hover { background: var(--bg-hover); color: var(--text); }
+
 .shell__content { flex: 1; min-width: 0; overflow: auto; }
 .shell__placeholder {
   height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -48,9 +66,12 @@
     flex: 1; flex-direction: column; gap: 2px; justify-content: center;
     padding: var(--space-1); border-radius: 0; min-height: 0;
   }
-  .shell__label { font-size: 10px; }
+  .shell__label { font-size: 13px; }
   .shell__nav.is-active { background: transparent; }
   .shell__nav.is-active .shell__icon { transform: translateY(-1px); }
   .shell__badge { position: absolute; top: 4px; right: 50%; margin-left: 0; transform: translateX(14px); }
   .shell__content { order: 1; flex: 1; }
+  /* These belong to the desktop rail; the bottom bar is nav only. Theme lives in
+     Settings on mobile. */
+  .shell__theme, .shell__pending { display: none; }
 }

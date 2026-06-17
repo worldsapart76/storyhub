@@ -17,7 +17,7 @@ Top-level settings sections:
 
 - Table showing every tag in the library: tag · state · category · count · auto-classified flag
 - Per-tag state: **Favorite** ⭐ / **Normal** / **Excluded** 🚫 (default for new tags: Normal)
-- Per-tag category: Universe / ABO / Content / Trope / Dynamics / Mood / Structure / Other (default for new tags: auto-classifier output, flagged for review). Structural categories (Fandom, Relationship, Character, Rating) are sourced from Calibre columns and don't appear here.
+- Per-tag category: Identity / Universe / Content / Trope / Dynamics / Mood / Structure / Other (default for new tags: auto-classifier output, flagged for review). ABO removed 2026-06-16 (dynamics→Trope/Content, alpha/omega role→Identity). Structural categories (Fandom, Relationship, Character, Rating) are sourced from Calibre columns and don't appear here.
 - Filter the list by category, state, or auto-classified flag — focused curation passes
 - Bulk actions: select-multi → set state, set category
 - "Needs review" view surfaces auto-classified tags not yet confirmed

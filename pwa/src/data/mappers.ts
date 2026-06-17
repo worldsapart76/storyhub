@@ -31,6 +31,12 @@ function fmtDate(s: unknown): string | undefined {
     : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+function tsOf(s: unknown): number | undefined {
+  if (!s) return undefined
+  const t = new Date(String(s)).getTime()
+  return isNaN(t) ? undefined : t
+}
+
 function toWork(r: unknown[]): Work {
   return {
     workId: Number(r[0]),
@@ -51,6 +57,8 @@ function toWork(r: unknown[]): Work {
     language: (r[15] as string) ?? undefined,
     dateAdded: fmtDate(r[16]),
     dateRead: fmtDate(r[17]) ?? null,
+    dateAddedTs: tsOf(r[16]),
+    dateReadTs: tsOf(r[17]),
     summary: stripHtml(r[18]),
     tags: parseJson<Tag[]>(r[19], []),
   }

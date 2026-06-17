@@ -61,7 +61,7 @@ web-font download, protects the Palma <2s budget), spacing/radii/elevation.
 - **Priority** is an ordinary (auto-starred) reading list, not a system list.
 - **read_status** = Unread/Read/DNF; **Favorite** is the orthogonal ★ (not a status).
 - **"Favorite"** (not "pin") for a tag always-shown-in-box — "pin" stays a work's offline copy.
-- **Identity** category **adopted** (position 4: Fandom · Relationship · Character · **Identity** · Universe · ABO · Content · Trope · Dynamics · Mood · Structure · Other · Rating). `browse.md` §7.3.1 updated. Real-data audit still planned before category lock (see memory).
+- **Identity** category **adopted** (position 4: Fandom · Relationship · Character · **Identity** · Universe · Content · Trope · Dynamics · Mood · Structure · Other · Rating). `browse.md` §7.3.1 updated. Real-data audit still planned before category lock (see memory). (**ABO removed 2026-06-16** during the deleted-works audit — dynamics→Trope/Content, alpha/omega role→Identity.)
 - **Category boxes** show only favorited tags by default (empty if none) + search-to-add — consistent for every category.
 - **Word count** = multi-select quick buckets **and** a precise Min–Max range.
 - **Reading-list membership** is NOT a filter-panel facet (lists live in their own nav surface).

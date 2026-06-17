@@ -86,7 +86,18 @@ async def build_sqlite(conn) -> tuple[bytes, int]:
             await _copy_table(conn, sq, t)
 
         tags = {r["tag_id"]: dict(r) for r in await conn.fetch(
-            "SELECT tag_id, name, display_name, kind, category, canonical_tag_id FROM tags")}
+            "SELECT tag_id, name, display_name, kind, category, canonical_tag_id, "
+            "state FROM tags")}
+
+        def is_excluded(tag_id: int) -> bool:
+            """Excluded tags are hidden everywhere except Tag Management (the FFF
+            tags-audit `keep=n` rule). Exclude the tag itself or — for a synonym —
+            its canonical."""
+            t = tags[tag_id]
+            if t["state"] == "excluded":
+                return True
+            canon = t["canonical_tag_id"]
+            return bool(canon and canon in tags and tags[canon]["state"] == "excluded")
         coll_of: dict[int, str] = {}
         for r in await conn.fetch(
                 "SELECT m.tag_id, g.name FROM tag_group_members m "
@@ -133,6 +144,8 @@ async def build_sqlite(conn) -> tuple[bytes, int]:
                     primary_ship = name
                 if e["is_primary_collection"]:
                     primary_collection = coll_of.get(e["tag_id"]) or name
+                if is_excluded(e["tag_id"]):
+                    continue  # hidden everywhere except Tag Management
                 cat_box = _card_category(kind, cat)
                 if (name, cat_box) in seen:
                     continue

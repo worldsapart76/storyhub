@@ -9,7 +9,7 @@ collection, descriptive -> property). Curated in Tag Management (Phase G).
 from __future__ import annotations
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from ..db import get_conn
 from ..models import GroupCreate, GroupPatch, GroupType, TagGroup
@@ -114,6 +114,16 @@ async def patch_group(
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Group not found")
     return await _load(conn, group_id)  # type: ignore[return-value]
+
+
+@router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_group(
+    group_id: int, conn: asyncpg.Connection = Depends(get_conn)
+) -> Response:
+    """Delete a roll-up group (members cascade). Used when the last member is
+    removed in Tag Management, or to discard a group outright."""
+    await conn.execute("DELETE FROM tag_groups WHERE group_id = $1", group_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{group_id}/members/{tag_id}", response_model=TagGroup)

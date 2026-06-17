@@ -4,6 +4,11 @@
 
 html, body, #root { height: 100%; }
 
+/* The app's responsive primitive: surfaces use `@container viewport (...)` (e.g.
+   NavShell flips the sidebar to bottom tabs ≤720px). The gallery set this on its
+   own frame; the wired app needs it at the root so those queries actually fire. */
+#root { container: viewport / inline-size; }
+
 body {
   margin: 0;
   font-family: var(--font-ui);

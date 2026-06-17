@@ -1,10 +1,29 @@
 .tm { padding: var(--space-5); width: 100%; }
 
+/* The whole top region pins as one block (header + filters + bulk bar + column
+   labels) while the rows scroll under it. Negative margins span the .tm padding so
+   the opaque background covers edge-to-edge; inner padding restores the spacing. */
+.tm__sticky {
+  position: sticky; top: 0; z-index: 5;
+  background: var(--bg);
+  margin: calc(-1 * var(--space-5)) calc(-1 * var(--space-5)) 0;
+  padding: var(--space-5) var(--space-5) 0;
+}
 .tm__head {
   display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
   margin-bottom: var(--space-4);
 }
 .tm__title { font-size: var(--text-xl); }
+.tm__headright { display: inline-flex; align-items: center; gap: var(--space-3); }
+.tm__rebuild {
+  border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-muted);
+  font-size: var(--text-sm); padding: 6px var(--space-3); border-radius: var(--radius-md); white-space: nowrap;
+}
+.tm__rebuild:disabled { cursor: default; }
+.tm__rebuild.is-dirty {
+  background: var(--accent-quiet); color: var(--accent); border-color: var(--accent);
+  font-weight: var(--weight-medium);
+}
 .tm__tabs { display: inline-flex; background: var(--bg-sunken); border-radius: var(--radius-md); padding: 3px; }
 .tm__tab {
   border: none; background: transparent; color: var(--text-secondary);
@@ -48,6 +67,7 @@
 }
 .tm__bulkbtn:hover { border-color: var(--accent); }
 .tm__bulkbtn:disabled { opacity: 0.45; }
+.tm__bulkbtn.is-locked { border-color: var(--warning); color: var(--warning); }
 .tm__bulkdone { font-size: var(--text-xs); color: var(--success); font-weight: var(--weight-medium); white-space: nowrap; }
 .tm__bulkclear { border: none; background: transparent; color: var(--text-muted); padding: 0 6px; flex: none; }
 
@@ -66,16 +86,20 @@
 .tm__menutype { margin-left: auto; font-size: var(--text-xs); color: var(--text-muted); }
 
 /* ---- Table ---- */
-.tm__table { border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
+/* The column header now lives in the sticky block, just above the table; borders
+   join the two into one continuous table outline. */
+.tm__table { border: 1px solid var(--border); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
 .tm__thead, .tm__row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1.6fr) minmax(0, 1fr) 64px minmax(0, 0.95fr) 116px 72px minmax(0, 1.15fr) minmax(0, 1.4fr) 56px;
+  grid-template-columns: 32px minmax(0, 1.6fr) minmax(0, 1fr) 64px minmax(0, 0.95fr) 56px 72px minmax(0, 1.15fr) minmax(0, 1.4fr) 56px;
   align-items: center; gap: var(--space-2);
   padding: 8px var(--space-3);
 }
 .tm__thead {
   background: var(--bg-sunken); font-size: var(--text-xs); color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.04em;
+  border: 1px solid var(--border); border-bottom: none;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
 }
 .tm__sortbtn {
   border: none; background: transparent; color: var(--text-muted);
@@ -105,6 +129,7 @@
 .tm__kind--warning { background: #fdede7; color: #c2542a; }
 
 .tm__na { color: var(--text-muted); }
+.tm__synro { color: var(--text-secondary); font-size: var(--text-sm); }
 .tm__auto { flex: none; font-size: 10px; color: var(--warning); background: #fff4e0; padding: 1px 5px; border-radius: var(--radius-pill); text-transform: uppercase; }
 .tm__auto--btn { border: none; cursor: pointer; white-space: nowrap; }
 .tm__auto--btn:hover { background: var(--success); color: #fff; }
@@ -120,6 +145,18 @@
 .tm__statesel { font-weight: var(--weight-medium); }
 .tm__statesel--favorite { color: var(--favorite); border-color: var(--favorite); }
 .tm__statesel--excluded { color: var(--danger); border-color: var(--danger); }
+
+/* Per-row state toggle (☆ Normal → ★ Favorite → ⊘ Excluded → ☆). */
+.tm__statetoggle {
+  width: 32px; height: 28px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--bg-elevated); color: var(--text-muted);
+  font-size: var(--text-lg); line-height: 1;
+}
+.tm__statetoggle:hover { border-color: var(--accent); }
+.tm__statetoggle--favorite { color: var(--favorite); border-color: var(--favorite); }
+.tm__statetoggle--excluded { color: var(--danger); border-color: var(--danger); }
 
 .tm__col-cat { min-width: 0; }
 .tm__catwrap { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }

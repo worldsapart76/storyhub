@@ -7,11 +7,15 @@ import { NAV_ITEMS } from '../mock/data'
    Responsive purely via @container so it flips inside the phone frame. */
 
 /* Controlled when `active`/`onNavigate` are passed (the wired App routes), else
-   self-manages (the design gallery). */
-export function NavShell({ children, active: activeProp, onNavigate }: {
+   self-manages (the design gallery). A theme toggle renders only when `theme`/
+   `onToggleTheme` are supplied (the real app) — the gallery has its own. */
+export function NavShell({ children, active: activeProp, onNavigate, theme, onToggleTheme, pending = 0 }: {
   children?: ReactNode
   active?: string
   onNavigate?: (id: string) => void
+  theme?: 'light' | 'dark'
+  onToggleTheme?: () => void
+  pending?: number
 }) {
   const [internal, setInternal] = useState<string>('browse')
   const active = activeProp ?? internal
@@ -34,6 +38,19 @@ export function NavShell({ children, active: activeProp, onNavigate }: {
             </button>
           ))}
         </div>
+        {pending > 0 && (
+          <div className="shell__pending" title={`${pending} change${pending === 1 ? '' : 's'} waiting to sync`}>
+            <span aria-hidden>⟳</span> {pending} unsynced
+          </div>
+        )}
+        {onToggleTheme && (
+          <button className="shell__theme" onClick={onToggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={theme === 'dark' ? 'Light theme' : 'Dark theme'}>
+            <span className="shell__icon" aria-hidden>{theme === 'dark' ? '☀️' : '🌙'}</span>
+            <span className="shell__label">{theme === 'dark' ? 'Light' : 'Dark'}</span>
+          </button>
+        )}
       </nav>
 
       <main className="shell__content">

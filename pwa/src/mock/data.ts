@@ -13,7 +13,7 @@ export type Category =
                  //   character IS in this AU — species/role/state (Vampire X,
                  //   Human Y, Trans Z). Distinct from Character (who) and
                  //   Universe (world framing).
-  | 'Universe' | 'ABO' | 'Content' | 'Trope' | 'Dynamics' | 'Mood' | 'Structure'
+  | 'Universe' | 'Content' | 'Trope' | 'Dynamics' | 'Mood' | 'Structure'
   | 'Other' | 'Rating'
 
 /* `grouped` marks a canonical chip that collapses synonyms (§6.3.1) — shows a ◇.
@@ -91,9 +91,9 @@ const denseTags1: Tag[] = [
   t('Steve Rogers', 'Character'),
   t('Sam Wilson', 'Character'),
   t('Natasha Romanov', 'Character'),
-  t('Alpha/Beta/Omega Dynamics', 'ABO'),
-  t('Omega Bucky Barnes', 'ABO'),
-  t('Alpha Steve Rogers', 'ABO'),
+  t('Alpha/Beta/Omega Dynamics', 'Trope'),
+  t('Omega Bucky Barnes', 'Identity'),
+  t('Alpha Steve Rogers', 'Identity'),
   t('Hurt/Comfort', 'Mood'),
   t('Angst with a Happy Ending', 'Mood'),
   t('Slow Burn', 'Structure'),
@@ -819,7 +819,7 @@ export type ManagedTag = {
 /* Freeform-assignable categories (the `categories` table — §12.6). Structural
    kinds (fandom/relationship/character) take no category; Rating is a column. */
 export const FREEFORM_CATEGORIES: Category[] = [
-  'Identity', 'Universe', 'ABO', 'Content', 'Trope', 'Dynamics', 'Mood', 'Structure', 'Other',
+  'Identity', 'Universe', 'Content', 'Trope', 'Dynamics', 'Mood', 'Structure', 'Other',
 ]
 
 /* Structural kinds (fandom + relationship — both feed XTEINK folder levels) →
