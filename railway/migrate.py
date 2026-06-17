@@ -372,6 +372,22 @@ def _parse_dt(s):
         return None
 
 
+def _int(x):
+    """Coerce a cache value to int|None (uniform type for batched COPY/executemany)."""
+    try:
+        return int(x) if x not in (None, "") else None
+    except (ValueError, TypeError):
+        return None
+
+
+def _num(x):
+    """Coerce a cache value to float|None for the numeric series_index column."""
+    try:
+        return float(x) if x not in (None, "") else None
+    except (ValueError, TypeError):
+        return None
+
+
 def load(db_url, only_sample=True):
     import asyncio
     asyncio.run(_load_async(db_url, only_sample))
@@ -409,39 +425,102 @@ async def _load_async(db_url, only_sample):
 
     conn = await asyncpg.connect(db_url)
     try:
-        # 1. Upsert all tags; set display_name on primary-ship relationship tags.
-        tag_id = {}
-        seen = {(n, k) for w in works for f, k in KIND_FIELDS for n in _jl(w[f])}
-        for name, kind in seen:
-            disp = ship_display.get(name) if kind == "relationship" else None
-            row = await conn.fetchrow(
-                "INSERT INTO tags (name, kind, display_name) VALUES ($1,$2,$3) "
-                "ON CONFLICT (name, kind) DO UPDATE SET "
-                "display_name = COALESCE(EXCLUDED.display_name, tags.display_name), "
-                "updated_at = now() RETURNING tag_id", name, kind, disp)
-            tag_id[(name, kind)] = row["tag_id"]
+        # All phases batched (one set-based round-trip each, not row-by-row) inside a
+        # single transaction — a failure rolls the whole load back to a clean DB.
+        async with conn.transaction():
+            # 1. Tags — one upsert over unnest()ed arrays, RETURNING recovers all ids.
+            seen = {(n, k) for w in works for f, k in KIND_FIELDS for n in _jl(w[f])}
+            t_names, t_kinds, t_disp = [], [], []
+            for name, kind in seen:
+                t_names.append(name)
+                t_kinds.append(kind)
+                t_disp.append(ship_display.get(name) if kind == "relationship" else None)
+            tag_id = {}
+            for r in await conn.fetch(
+                    "INSERT INTO tags (name, kind, display_name) "
+                    "SELECT n,k,d FROM unnest($1::text[],$2::text[],$3::text[]) AS u(n,k,d) "
+                    "ON CONFLICT (name, kind) DO UPDATE SET "
+                    "  display_name = COALESCE(EXCLUDED.display_name, tags.display_name), "
+                    "  updated_at = now() "
+                    "RETURNING tag_id, name, kind", t_names, t_kinds, t_disp):
+                tag_id[(r["name"], r["kind"])] = r["tag_id"]
 
-        # 2. Collection groups (get-or-create) + members (preserve XTEINK names).
-        for coll, fandoms in coll_members.items():
-            g = await conn.fetchrow(
-                "SELECT group_id FROM tag_groups WHERE name=$1 AND group_type='collection'", coll)
-            gid = g["group_id"] if g else (await conn.fetchrow(
-                "INSERT INTO tag_groups (name, group_type) VALUES ($1,'collection') "
-                "RETURNING group_id", coll))["group_id"]
-            for f in fandoms:
-                if (f, "fandom") in tag_id:
-                    await conn.execute(
-                        "INSERT INTO tag_group_members (group_id, tag_id) VALUES ($1,$2) "
-                        "ON CONFLICT DO NOTHING", gid, tag_id[(f, "fandom")])
+            # 2. Collection groups (get-or-create; no unique constraint on name) +
+            #    members (preserve XTEINK fandom names per collection).
+            gid = {r["name"]: r["group_id"] for r in await conn.fetch(
+                "SELECT group_id, name FROM tag_groups WHERE group_type='collection'")}
+            missing = [c for c in coll_members if c not in gid]
+            if missing:
+                for r in await conn.fetch(
+                        "INSERT INTO tag_groups (name, group_type) "
+                        "SELECT n,'collection' FROM unnest($1::text[]) n "
+                        "RETURNING group_id, name", missing):
+                    gid[r["name"]] = r["group_id"]
+            gm_g, gm_t = [], []
+            for coll, fandoms in coll_members.items():
+                for f in fandoms:
+                    if (f, "fandom") in tag_id:
+                        gm_g.append(gid[coll])
+                        gm_t.append(tag_id[(f, "fandom")])
+            if gm_g:
+                await conn.execute(
+                    "INSERT INTO tag_group_members (group_id, tag_id) "
+                    "SELECT g,t FROM unnest($1::bigint[],$2::bigint[]) AS u(g,t) "
+                    "ON CONFLICT DO NOTHING", gm_g, gm_t)
 
-        # 3. Per-work: works row + authors + work_tags (positions + primary flags).
-        priority = []
-        for w in works:
-            wid = int(w["work_id"])
-            chapters = w["chapters"]
-            ch_count = int(chapters.split("/")[0]) if chapters and chapters.split("/")[0].isdigit() else None
-            ekey, ehash = epub.get(wid, (None, None))
-            await conn.execute(
+            # 3. Authors (batch upsert -> id map), then build works / work_authors /
+            #    work_tags rows in Python and send each as one executemany batch.
+            author_id = {}
+            author_names = list({n for w in works for n in _jl(w["cauthors"])})
+            if author_names:
+                for r in await conn.fetch(
+                        "INSERT INTO authors (name) SELECT n FROM unnest($1::text[]) n "
+                        "ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name "
+                        "RETURNING author_id, name", author_names):
+                    author_id[r["name"]] = r["author_id"]
+
+            work_rows, wa_rows, wt_rows, priority = [], [], [], []
+            seen_wa, seen_wt = set(), set()
+            for w in works:
+                wid = int(w["work_id"])
+                chapters = w["chapters"]
+                ch_count = int(chapters.split("/")[0]) if chapters and chapters.split("/")[0].isdigit() else None
+                ekey, ehash = epub.get(wid, (None, None))
+                work_rows.append((
+                    wid, f"https://archiveofourown.org/works/{wid}",
+                    _clean_title(w["title"]) or w["ctitle"] or f"(untitled {wid})",
+                    w["summary_html"] or w["comments"], w["shortsummary"],
+                    _int(w["wordcount"] or w["cwordcount"]), ch_count,
+                    bool(w["is_complete"]),
+                    w["language"] or (_jl(w["languages"])[:1] or [None])[0],
+                    w["series_name"] or w["cseries"],
+                    _num(w["series_index"] if w["series_name"] else w["cseries_index"]),
+                    map_rating((_jl(w["rating"])[:1] or [None])[0]),
+                    READSTATUS_MAP.get(w["readstatus"], "Unread"),
+                    w["readstatus"] == "Favorite", _parse_dt(w["ts"]), ekey, ehash))
+
+                for pos, name in enumerate(_jl(w["cauthors"])):
+                    aid = author_id[name]
+                    if (wid, aid) in seen_wa:
+                        continue
+                    seen_wa.add((wid, aid))
+                    wa_rows.append((wid, aid, pos))
+
+                prim_fandom = (_jl(w["fandoms"])[:1] or [None])[0]
+                prim_rel = (_jl(w["relationships"])[:1] or [None])[0]
+                for field, kind in KIND_FIELDS:
+                    for pos, name in enumerate(_jl(w[field])):
+                        tid = tag_id[(name, kind)]
+                        if (wid, tid) in seen_wt:
+                            continue
+                        seen_wt.add((wid, tid))
+                        wt_rows.append((wid, tid, pos,
+                            kind == "relationship" and pos == 0 and name == prim_rel,
+                            kind == "fandom" and pos == 0 and name == prim_fandom))
+                if w["readstatus"] == "Priority":
+                    priority.append(wid)
+
+            await conn.executemany(
                 """INSERT INTO works (work_id, source, work_type, source_url, title,
                      summary_html, short_summary, wordcount, chapter_count, is_complete,
                      language, series_name, series_index, rating, read_status,
@@ -457,53 +536,30 @@ async def _load_async(db_url, only_sample):
                      is_favorite=EXCLUDED.is_favorite, date_added=EXCLUDED.date_added,
                      epub_r2_key=COALESCE(EXCLUDED.epub_r2_key, works.epub_r2_key),
                      epub_hash=COALESCE(EXCLUDED.epub_hash, works.epub_hash),
-                     updated_at=now()""",
-                wid, f"https://archiveofourown.org/works/{wid}",
-                _clean_title(w["title"]) or w["ctitle"], w["summary_html"] or w["comments"],
-                w["shortsummary"], w["wordcount"] or w["cwordcount"], ch_count,
-                bool(w["is_complete"]), w["language"] or (_jl(w["languages"])[:1] or [None])[0],
-                w["series_name"] or w["cseries"],
-                w["series_index"] if w["series_name"] else w["cseries_index"],
-                map_rating((_jl(w["rating"])[:1] or [None])[0]),
-                READSTATUS_MAP.get(w["readstatus"], "Unread"),
-                w["readstatus"] == "Favorite", _parse_dt(w["ts"]), ekey, ehash)
-
-            await conn.execute("DELETE FROM work_authors WHERE work_id=$1", wid)
-            for pos, name in enumerate(_jl(w["cauthors"])):
-                a = await conn.fetchrow(
-                    "INSERT INTO authors (name) VALUES ($1) ON CONFLICT (name) "
-                    "DO UPDATE SET name=EXCLUDED.name RETURNING author_id", name)
-                await conn.execute(
+                     updated_at=now()""", work_rows)
+            if wa_rows:
+                await conn.executemany(
                     "INSERT INTO work_authors (work_id, author_id, position) VALUES ($1,$2,$3) "
                     "ON CONFLICT (work_id, author_id) DO UPDATE SET position=EXCLUDED.position",
-                    wid, a["author_id"], pos)
+                    wa_rows)
+            if wt_rows:
+                await conn.executemany(
+                    "INSERT INTO work_tags (work_id, tag_id, position, "
+                    "is_primary_ship, is_primary_collection) VALUES ($1,$2,$3,$4,$5) "
+                    "ON CONFLICT (work_id, tag_id) DO NOTHING", wt_rows)
 
-            await conn.execute("DELETE FROM work_tags WHERE work_id=$1", wid)
-            prim_fandom = (_jl(w["fandoms"])[:1] or [None])[0]
-            prim_rel = (_jl(w["relationships"])[:1] or [None])[0]
-            for field, kind in KIND_FIELDS:
-                for pos, name in enumerate(_jl(w[field])):
-                    await conn.execute(
-                        "INSERT INTO work_tags (work_id, tag_id, position, "
-                        "is_primary_ship, is_primary_collection) VALUES ($1,$2,$3,$4,$5)",
-                        wid, tag_id[(name, kind)], pos,
-                        kind == "relationship" and pos == 0 and name == prim_rel,
-                        kind == "fandom" and pos == 0 and name == prim_fandom)
-            if w["readstatus"] == "Priority":
-                priority.append(wid)
-
-        # 4. Reading lists: Favorites (system, rule) + Priority (manual members).
-        await conn.execute(
-            "INSERT INTO reading_lists (name, is_system, membership_rule) "
-            "SELECT 'Favorites', true, 'is_favorite = true' "
-            "WHERE NOT EXISTS (SELECT 1 FROM reading_lists WHERE name='Favorites')")
-        if priority:
-            pl = await conn.fetchrow("SELECT id FROM reading_lists WHERE name='Priority'") \
-                or await conn.fetchrow("INSERT INTO reading_lists (name) VALUES ('Priority') RETURNING id")
-            for pos, wid in enumerate(priority):
-                await conn.execute(
+            # 4. Reading lists: Favorites (system, rule) + Priority (manual members).
+            await conn.execute(
+                "INSERT INTO reading_lists (name, is_system, membership_rule) "
+                "SELECT 'Favorites', true, 'is_favorite = true' "
+                "WHERE NOT EXISTS (SELECT 1 FROM reading_lists WHERE name='Favorites')")
+            if priority:
+                pl = await conn.fetchrow("SELECT id FROM reading_lists WHERE name='Priority'") \
+                    or await conn.fetchrow("INSERT INTO reading_lists (name) VALUES ('Priority') RETURNING id")
+                await conn.executemany(
                     "INSERT INTO reading_list_members (reading_list_id, work_id, position) "
-                    "VALUES ($1,$2,$3) ON CONFLICT DO NOTHING", pl["id"], wid, pos)
+                    "VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
+                    [(pl["id"], wid, pos) for pos, wid in enumerate(priority)])
 
         c = await conn.fetchrow(
             "SELECT (SELECT COUNT(*) FROM works) w, (SELECT COUNT(*) FROM tags) t, "
