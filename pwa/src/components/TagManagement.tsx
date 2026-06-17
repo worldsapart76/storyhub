@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import './TagManagement.css'
 import { useLibrary } from '../data/library'
@@ -99,10 +100,22 @@ export function TagManagement() {
   )
 }
 
-/* Searchable, alphabetised dropdown shared by the synonym + group pickers. */
+/* Fixed-position style anchored to a trigger rect; flips above when low on space. */
+function menuStyle(a: DOMRect): React.CSSProperties {
+  const width = 240
+  const left = Math.max(8, Math.min(a.left, window.innerWidth - width - 8))
+  const spaceBelow = window.innerHeight - a.bottom
+  if (spaceBelow < 300 && a.top > spaceBelow) return { left, bottom: window.innerHeight - a.top + 4, top: 'auto', width }
+  return { left, top: a.bottom + 4, width }
+}
+
+/* Searchable, alphabetised dropdown shared by the synonym + group pickers. When an
+   `anchor` rect is given (the per-row pickers), it renders in a PORTAL with fixed
+   positioning so it escapes the virtualized table's overflow-clip and row stacking
+   (without it — the bulk-bar pickers — it stays an absolute child as before). */
 type Opt = { key: string; label: string; mark?: string }
 function SearchMenu({
-  options, onPick, onClose, placeholder, onCreate, createNoun,
+  options, onPick, onClose, placeholder, onCreate, createNoun, anchor,
 }: {
   options: Opt[]
   onPick: (key: string) => void
@@ -110,17 +123,30 @@ function SearchMenu({
   placeholder?: string
   onCreate?: (name: string) => void
   createNoun?: string
+  anchor?: DOMRect
 }) {
   const [q, setQ] = useState('')
+  const menuRef = useRef<HTMLDivElement>(null)
   const ql = q.trim().toLowerCase()
   const matched = options.filter((o) => o.label.toLowerCase().includes(ql)).sort((a, b) => a.label.localeCompare(b.label))
   const filtered = matched.slice(0, 60)  // cap render; keep typing to narrow (scales to 28k tags)
   const more = matched.length - filtered.length
   const exact = options.some((o) => o.label.toLowerCase() === ql)
-  return (
+
+  // Portal mode: a fixed menu can't follow the page as it scrolls, so close on any
+  // scroll/resize — except scrolling within the menu's own option list.
+  useEffect(() => {
+    if (!anchor) return
+    const onScroll = (e: Event) => { if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return; onClose() }
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('resize', onClose)
+    return () => { window.removeEventListener('scroll', onScroll, true); window.removeEventListener('resize', onClose) }
+  }, [anchor, onClose])
+
+  const body = (
     <>
-      <div className="tm__scrim" onClick={onClose} />
-      <div className="tm__menu">
+      <div className={'tm__scrim' + (anchor ? ' tm__scrim--top' : '')} onClick={onClose} />
+      <div ref={menuRef} className={'tm__menu' + (anchor ? ' tm__menu--fixed' : '')} style={anchor ? menuStyle(anchor) : undefined}>
         <input className="tm__menusearch" autoFocus placeholder={placeholder ?? 'Filter…'} value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && onCreate && q.trim() && !exact) onCreate(q.trim()) }} />
@@ -141,6 +167,7 @@ function SearchMenu({
       </div>
     </>
   )
+  return anchor ? createPortal(body, document.body) : body
 }
 
 function TagsView({ tab, setTab }: TabProps) {
@@ -163,6 +190,7 @@ function TagsView({ tab, setTab }: TabProps) {
   const [sort, setSort] = useState<{ key: 'name' | 'count'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' })
   const [synRow, setSynRow] = useState<number | null>(null)
   const [groupRow, setGroupRow] = useState<number | null>(null)
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null) // trigger rect for the portal'd row picker
 
   useEffect(() => {
     Promise.all([fetchTags(), fetchGroups(), fetchCategories()])
@@ -466,12 +494,15 @@ function TagsView({ tab, setTab }: TabProps) {
               <span className="tm__td tm__col-syn" data-label="Synonym of">
                 <span className="tm__synwrap">
                   <button className={'tm__synbtn' + (t.canonicalTagId ? ' is-set' : '')} disabled={isCanon}
-                    onClick={() => { setSynRow((c) => (c === t.id ? null : t.id)); setGroupRow(null) }} aria-expanded={synRow === t.id}
+                    onClick={(e) => { const open = synRow === t.id; setGroupRow(null); setSynRow(open ? null : t.id); setPickerAnchor(open ? null : e.currentTarget.getBoundingClientRect()) }} aria-expanded={synRow === t.id}
                     title={isCanon ? 'This tag is a canonical; clear its synonyms first' : undefined}>
                     {t.canonicalTagId ? `↳ ${canonName(t.canonicalTagId)}` : 'synonym of…'}
                   </button>
+                  {t.canonicalTagId && (
+                    <button className="tm__synclear" onClick={() => setSynonym(t.id, null)} title="Remove — no longer a synonym" aria-label="Remove synonym">×</button>
+                  )}
                   {synRow === t.id && (
-                    <SearchMenu options={synOptions(t)} placeholder="Filter canonicals…"
+                    <SearchMenu options={synOptions(t)} placeholder="Filter canonicals…" anchor={pickerAnchor ?? undefined}
                       onPick={(key) => setSynonym(t.id, key ? Number(key) : null)} onClose={() => setSynRow(null)} />
                   )}
                 </span>
@@ -486,9 +517,9 @@ function TagsView({ tab, setTab }: TabProps) {
                   </span>
                 ))}
                 <span className="tm__addwrap">
-                  <button className="tm__addgrp" onClick={() => { setGroupRow((c) => (c === t.id ? null : t.id)); setSynRow(null) }} aria-expanded={groupRow === t.id}>+ group</button>
+                  <button className="tm__addgrp" onClick={(e) => { const open = groupRow === t.id; setSynRow(null); setGroupRow(open ? null : t.id); setPickerAnchor(open ? null : e.currentTarget.getBoundingClientRect()) }} aria-expanded={groupRow === t.id}>+ group</button>
                   {groupRow === t.id && (
-                    <SearchMenu options={groupOptions(t)} placeholder={`Filter ${groupClassOf(t.kind)} groups…`}
+                    <SearchMenu options={groupOptions(t)} placeholder={`Filter ${groupClassOf(t.kind)} groups…`} anchor={pickerAnchor ?? undefined}
                       onPick={(key) => addToGroup(Number(key), t.id)} onClose={() => setGroupRow(null)}
                       onCreate={(name) => createGroupFor(t.id, name)} createNoun={groupClassOf(t.kind)} />
                   )}

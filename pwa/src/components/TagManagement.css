@@ -77,6 +77,10 @@
   background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg); min-width: 200px; max-height: 280px; overflow: auto;
 }
+/* Portal'd row picker (synonym/group): fixed + above the sticky header so the
+   virtualized table's overflow-clip and row stacking can't hide it. */
+.tm__menu--fixed { position: fixed; z-index: 1000; }
+.tm__scrim--top { z-index: 999; }
 .tm__menuitem {
   display: flex; align-items: center; gap: 6px; width: 100%; text-align: left;
   border: none; background: transparent; color: var(--text); font-size: var(--text-sm);
@@ -226,7 +230,12 @@
 .tm__col-canon { display: flex; justify-content: center; }
 .tm__col-canon input { accent-color: var(--accent); }
 .tm__col-syn { min-width: 0; }
-.tm__synwrap { position: relative; }
+.tm__synwrap { position: relative; display: inline-flex; align-items: center; gap: 2px; max-width: 100%; }
+.tm__synclear {
+  flex: none; border: none; background: transparent; color: var(--text-muted);
+  font-size: 14px; line-height: 1; padding: 0 2px; border-radius: var(--radius-sm);
+}
+.tm__synclear:hover { color: var(--danger); }
 .tm__synbtn {
   max-width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 1px dashed var(--border-strong); background: transparent; color: var(--text-muted);
