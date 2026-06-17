@@ -80,6 +80,21 @@ export const groupClassOf = (k: TagKind): GroupClass =>
 export const synonymDomainOf = (t: { category: string | null; kind: TagKind }): string =>
   t.category ?? `kind:${t.kind}`
 
+const STRUCTURAL_KINDS: TagKind[] = ['fandom', 'relationship', 'character']
+const DESCRIPTIVE_KINDS: TagKind[] = ['freeform', 'warning']
+
+/* Whether `child` may be made a synonym of `canonical`. Same domain (category, else
+   kind) is always allowed; additionally a descriptive tag (freeform/warning) may be
+   syn'd "up" to a structural canonical (fandom/relationship/character) — the common
+   case where a freeform is really a ship/character, e.g. "Reylo" -> "Rey/Kylo Ren".
+   The DB only forbids self-reference; this is the app-side guard (redesign §6.3.1). */
+export const canBeSynonymOf = (
+  child: { category: string | null; kind: TagKind },
+  canonical: { category: string | null; kind: TagKind },
+): boolean =>
+  synonymDomainOf(child) === synonymDomainOf(canonical) ||
+  (DESCRIPTIVE_KINDS.includes(child.kind) && STRUCTURAL_KINDS.includes(canonical.kind))
+
 export type TagGroup = {
   id: number
   name: string

@@ -5,7 +5,7 @@ import { useLibrary } from '../data/library'
 import {
   fetchTags, patchTag, readTagCounts,
   fetchGroups, createGroup, addGroupMember, removeGroupMember, deleteGroup,
-  groupClassOf, synonymDomainOf,
+  groupClassOf, canBeSynonymOf,
   type ManagedTag, type TagKind, type TagState, type TagGroup,
 } from '../data/tags'
 import {
@@ -13,6 +13,8 @@ import {
   reorderCategories, setCategoryLock, type Category,
 } from '../data/categories'
 import { markSnapshotDirty, isSnapshotDirty, onSnapshotDirtyChange, rebuildSnapshot } from '../data/snapshot'
+import { useNav } from '../data/appnav'
+import { emptyFilter } from '../data/filters'
 
 /* Tag Management (redesign §12.6). Sub-chunk 1: editable display alias, category,
    and state (★ favorite / normal / excluded), with per-tag use counts. Sub-chunk 2:
@@ -29,6 +31,16 @@ const CLASS_MARK = { collection: '▣', property: '◆' } as const
 const categoryAllowed = (k: TagKind) => k === 'freeform' || k === 'warning'
 
 // Per-row state cycles on a single click: Normal → Favorite → Excluded → Normal.
+// A tag's Browse filter category box — MUST mirror snapshot_builder._card_category
+// so the "open in Browse" hand-off includes the tag under the box it lands in.
+function browseCategory(t: { kind: TagKind; category: string | null }): string {
+  if (t.kind === 'fandom') return 'Fandom'
+  if (t.kind === 'relationship') return 'Relationship'
+  if (t.kind === 'character') return 'Character'
+  if (t.kind === 'warning') return t.category ?? 'Content'
+  return t.category ?? 'Other'
+}
+
 const NEXT_STATE: Record<TagState, TagState> = { normal: 'favorite', favorite: 'excluded', excluded: 'normal' }
 const STATE_ICON: Record<TagState, string> = { normal: '☆', favorite: '★', excluded: '⊘' }
 const STATE_TITLE: Record<TagState, string> = {
@@ -133,6 +145,7 @@ function SearchMenu({
 
 function TagsView({ tab, setTab }: TabProps) {
   const { db } = useLibrary()
+  const { applyFilterToBrowse } = useNav()
   const [tags, setTags] = useState<ManagedTag[]>([])
   const [groups, setGroups] = useState<TagGroup[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -176,6 +189,14 @@ function TagsView({ tab, setTab }: TabProps) {
   const countOf = (t: ManagedTag) => counts.get(t.id) ?? 0
   const canonName = (id: number) => { const c = byId.get(id); return c ? (c.displayName ?? c.name) : '?' }
   const synCountOf = (t: ManagedTag) => synCounts.get(t.id) ?? 0
+
+  // Open Browse filtered to this tag. Synonyms resolve to their canonical (what the
+  // snapshot projects works under), and the box must match _card_category.
+  const openInBrowse = (t: ManagedTag) => {
+    const target = t.canonicalTagId ? (byId.get(t.canonicalTagId) ?? t) : t
+    const name = target.displayName ?? target.name
+    applyFilterToBrowse({ ...emptyFilter(), tags: { [browseCategory(target)]: { states: { [name]: 'include' }, mode: 'OR' } } })
+  }
 
   const filtered = useMemo(() => tags.filter((t) => {
     const q = search.trim().toLowerCase()
@@ -266,10 +287,9 @@ function TagsView({ tab, setTab }: TabProps) {
   const selTags = () => tags.filter((t) => selected.has(t.id))
   const bulkSynonym = (canonicalId: number) => {
     const canon = byId.get(canonicalId); if (!canon) return
-    const dom = synonymDomainOf(canon)
-    // only selected tags that share the canonical's domain, aren't it, and aren't themselves canonicals
-    const ids = selTags().filter((t) => t.id !== canonicalId && synonymDomainOf(t) === dom && synCountOf(t) === 0).map((t) => t.id)
-    if (!ids.length) { alert('No selected tags share that canonical’s domain.'); return }
+    // only selected tags that may be syn'd to the canonical, aren't it, and aren't themselves canonicals
+    const ids = selTags().filter((t) => t.id !== canonicalId && canBeSynonymOf(t, canon) && synCountOf(t) === 0).map((t) => t.id)
+    if (!ids.length) { alert('No selected tags can be synonyms of that canonical.'); return }
     setTags((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, canonicalTagId: canonicalId } : t)))
     Promise.all(ids.map((id) => patchTag(id, { canonical_tag_id: canonicalId }))).then(() => markSnapshotDirty())
       .catch((e) => { alert(`Some changes failed: ${e instanceof Error ? e.message : e}`); fetchTags().then(setTags).catch(() => {}) })
@@ -297,11 +317,10 @@ function TagsView({ tab, setTab }: TabProps) {
 
   // option builders for the per-row pickers
   const synOptions = (t: ManagedTag): Opt[] => {
-    const dom = synonymDomainOf(t)
     const opts: Opt[] = t.canonicalTagId ? [{ key: '', label: '— not a synonym —' }] : []
     for (const c of tags) {
       if (c.id === t.id || c.canonicalTagId != null) continue // no self, no chains
-      if (synonymDomainOf(c) !== dom) continue
+      if (!canBeSynonymOf(t, c)) continue
       opts.push({ key: String(c.id), label: c.displayName ?? c.name })
     }
     return opts
@@ -405,7 +424,10 @@ function TagsView({ tab, setTab }: TabProps) {
                  style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start - rowV.options.scrollMargin}px)` }}>
             <div className={'tm__row' + (selected.has(t.id) ? ' is-selected' : '')} role="row">
               <span className="tm__td tm__col-check"><input type="checkbox" checked={selected.has(t.id)} onChange={() => toggleSel(t.id)} aria-label={`Select ${t.name}`} /></span>
-              <span className="tm__td tm__col-name"><span className="tm__tagname">{t.name}</span></span>
+              <span className="tm__td tm__col-name">
+                <span className="tm__tagname">{t.name}</span>
+                <button className="tm__inbrowse" title="Show works with this tag in Browse" aria-label="Open in Browse" onClick={() => openInBrowse(t)}>↗</button>
+              </span>
 
               <span className="tm__td tm__col-alias" data-label="Display as">
                 <input className="tm__aliasinput" value={t.displayName ?? ''} placeholder="display as…"
