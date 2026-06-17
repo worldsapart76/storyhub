@@ -92,5 +92,11 @@
     ackAo3Action(id, result) {
       return req(`/api/ao3-actions/${id}/ack?result=${result}`, { method: 'POST' })
     },
+
+    // Rebuild the snapshot from current Postgres state (+ version bump). Debounced
+    // by the SW after capture/status bursts so clients pick it up on next sync.
+    rebuildSnapshot() {
+      return req('/api/snapshot/build', { method: 'POST' })
+    },
   }
 })()

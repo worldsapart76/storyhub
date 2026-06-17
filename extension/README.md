@@ -56,8 +56,25 @@ mode (no store submission).
   done: live DB `ao3_actions` CHECK now allows `mark_for_later`
   (`railway/migrations/0002_ao3_actions_mark_for_later.sql`, applied). PWA enqueues
   the read-status side-effects (`pwa/src/data/ao3.ts` ← `library.tsx`).
+- **Debounced snapshot rebuild: DONE.** After a capture / work-page status change
+  the content script signals the SW, which (re)sets a 1-min alarm and rebuilds the
+  snapshot once the burst settles — so adding many works across tabs triggers a
+  single rebuild, and new works reach the PWA without a manual step. The PWA's
+  in-app rebuild remains as a manual override.
 - E3b / bookmark — Bookmark intercept → private bookmark = Favorite (work-page
   intercept + drain `bookmark`/`remove_bookmark` + PWA favorite enqueue). *next*
+
+## Capture epub fetch (why it's shaped this way)
+
+AO3's Cloudflare blocks the epub fetch from the extension **service worker** (403
+— Chrome TLS/HTTP2 fingerprint + `chrome-extension://` origin) and from **Railway**
+(525 — datacenter IP). Only a **page-context content-script fetch** passes (your
+residential IP + real session). That fetch is otherwise CORS-blocked on
+`download.archiveofourown.org` (no ACAO header), so `rules.json` (declarativeNet-
+Request) injects `Access-Control-Allow-Origin`. The content script then POSTs the
+bytes to Railway (`/api/queue/{id}/epub`) — it can't PUT to R2 directly (R2 has no
+browser CORS). Do not "simplify" this back to an SW or server-side fetch — both
+are blocked.
 - E3 — work-page capture + status hooks (Mark-for-Later, Mark-as-Read, DNF,
   bookmark intercept).
 - E4 — `ao3_actions` drain on page load. *(precursor: confirm the live DB's

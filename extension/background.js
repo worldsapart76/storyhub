@@ -14,6 +14,26 @@ const SH = globalThis.SH
 
 const SYNC_ALARM = 'storyhub-snapshot-sync'
 const SYNC_PERIOD_MIN = 60
+const REBUILD_ALARM = 'storyhub-snapshot-rebuild'
+const REBUILD_DEBOUNCE_MIN = 1 // coalesce a burst of captures into one rebuild
+
+/* Debounce a snapshot rebuild: content scripts signal after a capture / work-page
+   status change; resetting the alarm on each signal means a burst of additions
+   (e.g. clicking through many AO3 tabs) triggers a single rebuild ~1 min after the
+   last one, not one per work. Survives the SW being killed (chrome.alarms). */
+function scheduleRebuild() {
+  chrome.alarms.create(REBUILD_ALARM, { delayInMinutes: REBUILD_DEBOUNCE_MIN })
+}
+
+async function rebuildSnapshot() {
+  if (!(await SH.storage.isConfigured())) return
+  try {
+    const r = await SH.api.rebuildSnapshot()
+    console.info('[StoryHub] snapshot rebuilt → v' + r.version, `(${r.work_count} works)`)
+  } catch (e) {
+    console.warn('[StoryHub] rebuild failed:', e.message)
+  }
+}
 
 /* Sync the snapshot if configured; never throw out of an event handler. */
 async function syncIfConfigured(force = false) {
@@ -37,6 +57,7 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === SYNC_ALARM) syncIfConfigured()
+  else if (alarm.name === REBUILD_ALARM) rebuildSnapshot()
 })
 
 /* Open the options page when the toolbar icon is clicked (no popup yet). */
@@ -55,6 +76,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
           break
         case 'syncNow':
           sendResponse(await syncIfConfigured(true))
+          break
+        case 'scheduleRebuild':
+          scheduleRebuild()
+          sendResponse({ ok: true })
           break
         case 'getStatus': {
           const [configured, meta] = await Promise.all([

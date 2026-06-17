@@ -24,6 +24,10 @@
     const map = await SH.storage.getBadgeMap()
     map[workId] = { ...(map[workId] || { s: 'Unread', f: 0, a: 'live' }), ...patch }
     await SH.storage.setBadgeMap(map) // fires storage.onChanged -> re-render
+    // Every setEntry follows a committed Postgres change (capture/status), so ask
+    // the SW to (debounced) rebuild the snapshot — the local badge already updated
+    // optimistically; this propagates to the PWA / other devices.
+    chrome.runtime.sendMessage({ type: 'scheduleRebuild' }).catch(() => {})
     return map[workId]
   }
 
