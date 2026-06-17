@@ -17,12 +17,18 @@ import type { CatFilter } from '../data/filters'
 export function CategoryBox({
   category,
   tags,
+  counts,
   defaultOpen = true,
   value,
   onChange,
 }: {
   category: string
   tags: TagOption[]
+  /* Co-occurrence-aware live counts (leave-one-out) for THIS category under the
+     current selection. When present, chips show these counts and zero-match
+     options are hidden (selected/active chips always stay). Omit to use each
+     tag's global count and hide nothing (the gallery's uncontrolled mode). */
+  counts?: Map<string, number>
   defaultOpen?: boolean
   /* Controlled mode (BrowseView): the include/exclude states + OR/AND mode are
      owned by the parent's FilterState. Favorites/session/search stay local
@@ -45,24 +51,34 @@ export function CategoryBox({
 
   const byName = useMemo(() => new Map(tags.map((t) => [t.name, t])), [tags])
 
-  // Visible = favorited + session-added + any tag with an active state (so a
-  // searched-then-set chip stays visible). Favorited first by count. No seeding.
+  // Live (co-occurrence) count when provided, else the tag's global count.
+  const liveCount = (name: string) => (counts ? counts.get(name) ?? 0 : byName.get(name)?.count ?? 0)
+
+  // Visible = favorited (with a live match, unless active) + session-added + any
+  // tag with an active state. Ranked by live count. When counts are present,
+  // zero-match favorites are hidden so the box reflects the current selection.
   const visible = useMemo(() => {
-    const favd = tags.filter((t) => favorites[t.name]).sort((a, b) => b.count - a.count).map((t) => t.name)
+    const lc = (n: string) => (counts ? counts.get(n) ?? 0 : byName.get(n)?.count ?? 0)
+    const act = (n: string) => (states[n] ?? 'default') !== 'default'
+    const favd = tags
+      .filter((t) => favorites[t.name] && (!counts || lc(t.name) > 0 || act(t.name)))
+      .sort((a, b) => lc(b.name) - lc(a.name) || a.name.localeCompare(b.name))
+      .map((t) => t.name)
     const active = Object.entries(states).filter(([, s]) => s !== 'default').map(([n]) => n)
     const extra = [...session, ...active].filter((n, i, arr) => arr.indexOf(n) === i && !favd.includes(n))
     return [...favd, ...extra]
-  }, [tags, favorites, session, states])
+  }, [tags, favorites, session, states, counts, byName])
 
   const suggestions = useMemo(() => {
     if (!query.trim()) return []
     const q = query.toLowerCase()
     const visibleSet = new Set(visible)
+    const lc = (n: string) => (counts ? counts.get(n) ?? 0 : byName.get(n)?.count ?? 0)
     return tags
-      .filter((t) => t.name.toLowerCase().includes(q) && !visibleSet.has(t.name))
-      .sort((a, b) => b.count - a.count)
+      .filter((t) => t.name.toLowerCase().includes(q) && !visibleSet.has(t.name) && (!counts || lc(t.name) > 0))
+      .sort((a, b) => lc(b.name) - lc(a.name) || a.name.localeCompare(b.name))
       .slice(0, 8)
-  }, [query, tags, visible])
+  }, [query, tags, visible, counts, byName])
 
   const setStatesBoth = (updater: (p: Record<string, ChipState>) => Record<string, ChipState>) => {
     if (controlled) onChange!({ states: updater(states), mode })
@@ -112,14 +128,13 @@ export function CategoryBox({
           {visible.length > 0 && (
             <div className="catbox__grid">
               {visible.map((name) => {
-                const opt = byName.get(name)!
                 const isFav = !!favorites[name]
                 return (
                   <FilterChip
                     key={name}
                     label={name}
                     state={states[name] ?? 'default'}
-                    count={opt.count}
+                    count={liveCount(name)}
                     favorite={isFav}
                     temporary={!isFav}
                     onCycle={() => cycle(name)}
@@ -143,7 +158,7 @@ export function CategoryBox({
                 {suggestions.map((s) => (
                   <button key={s.name} className="catbox__suggestitem" onClick={() => addSession(s.name)}>
                     <span className="catbox__suggestname">{s.name}</span>
-                    <span className="catbox__suggestcount">{s.count}</span>
+                    <span className="catbox__suggestcount">{liveCount(s.name)}</span>
                   </button>
                 ))}
               </div>

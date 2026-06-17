@@ -30,4 +30,8 @@
 
 .chip--temp { border-style: dashed; }
 
+/* Zero-match under the current selection: dim + non-interactive (quick filters). */
+.chip--disabled { opacity: 0.4; }
+.chip--disabled .chip__body { cursor: default; }
+
 .chip--default:hover { border-color: var(--text-muted); }

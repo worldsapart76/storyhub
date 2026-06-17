@@ -148,3 +148,95 @@ export function buildFacets(works: Work[], favNames?: Set<string>): Facets {
 
   return { categories, authors: [...authors.keys()].sort((a, b) => a.localeCompare(b)) }
 }
+
+/* ---- Dependent (faceted) filtering -------------------------------------- //
+   Co-occurrence-aware live counts: each facet's options/counts are computed over
+   the works matching all OTHER active constraints ("leave-one-out"), so a box never
+   limits itself (OR multi-select keeps working) but every other selection — includes
+   AND excludes, tag categories AND quick filters — narrows it. Pure + client-side
+   over the in-memory works; recompute on each filter change.
+   MUST stay in sync with applyFilters() above. (docs/ux/faceted-filtering.md) */
+export type DependentFacets = {
+  total: number
+  tags: Map<Category, Map<string, number>>
+  status: Map<string, number>
+  rating: Map<string, number>
+  buckets: Map<string, number>
+}
+
+export function dependentFacets(works: Work[], f: FilterState): DependentFacets {
+  const prepared = works.map((w) => ({ w, names: new Set(w.tags.map((t) => t.name.toLowerCase())) }))
+  const min = f.wordMin.trim() ? Number(f.wordMin) : null
+  const max = f.wordMax.trim() ? Number(f.wordMax) : null
+  const authorSet = f.authors.map((a) => a.toLowerCase())
+
+  // Precompute each active tag category's include/exclude/mode once.
+  const catC = new Map<string, { inc: string[]; exc: string[]; mode: 'OR' | 'AND' }>()
+  for (const [cat, cf] of Object.entries(f.tags)) {
+    const inc: string[] = []; const exc: string[] = []
+    for (const [name, s] of Object.entries(cf.states)) {
+      if (s === 'include') inc.push(name.toLowerCase())
+      else if (s === 'exclude') exc.push(name.toLowerCase())
+    }
+    if (inc.length || exc.length) catC.set(cat, { inc, exc, mode: cf.mode })
+  }
+  const activeCats = [...catC.keys()]
+
+  const passStatus = (w: Work) => singlePass(w.readStatus, f.status)
+  const passFav = (w: Work) => !f.favorite || w.isFavorite
+  const passRating = (w: Work) => singlePass(w.rating, f.rating)
+  const passWords = (w: Work) => {
+    if (f.buckets.length && !f.buckets.some((b) => inBucket(w.wordcount, b))) return false
+    if (min != null && !Number.isNaN(min) && w.wordcount < min) return false
+    if (max != null && !Number.isNaN(max) && w.wordcount > max) return false
+    return true
+  }
+  const passAuthor = (w: Work) => !authorSet.length || w.authors.some((a) => authorSet.includes(a.toLowerCase()))
+  const passTag = (names: Set<string>, cat: string) => {
+    const c = catC.get(cat); if (!c) return true
+    if (c.exc.some((n) => names.has(n))) return false
+    if (c.inc.length) {
+      const ok = c.mode === 'AND' ? c.inc.every((n) => names.has(n)) : c.inc.some((n) => names.has(n))
+      if (!ok) return false
+    }
+    return true
+  }
+  // Passes every active facet except the one named ('' skips nothing). Favorite is
+  // a binary toggle with no count facet, so it always applies.
+  const matchesExcept = (p: { w: Work; names: Set<string> }, except: string) => {
+    if (except !== 'status' && !passStatus(p.w)) return false
+    if (!passFav(p.w)) return false
+    if (except !== 'rating' && !passRating(p.w)) return false
+    if (except !== 'words' && !passWords(p.w)) return false
+    if (except !== 'author' && !passAuthor(p.w)) return false
+    for (const cat of activeCats) { if (except === 'tag:' + cat) continue; if (!passTag(p.names, cat)) return false }
+    return true
+  }
+
+  const tags = new Map<Category, Map<string, number>>()
+  const status = new Map<string, number>()
+  const rating = new Map<string, number>()
+  const buckets = new Map<string, number>()
+
+  const cats = new Set<Category>()
+  for (const p of prepared) for (const t of p.w.tags) cats.add(t.category)
+  for (const cat of cats) tags.set(cat, new Map())
+
+  // Quick-filter counts (leave-one-out per facet) + the full match set.
+  const fullMatch = prepared.filter((p) => matchesExcept(p, ''))
+  for (const p of prepared) {
+    if (matchesExcept(p, 'status')) status.set(p.w.readStatus, (status.get(p.w.readStatus) ?? 0) + 1)
+    if (matchesExcept(p, 'rating')) rating.set(p.w.rating, (rating.get(p.w.rating) ?? 0) + 1)
+    if (matchesExcept(p, 'words')) for (const b of WORDCOUNT_BUCKETS) if (inBucket(p.w.wordcount, b)) buckets.set(b, (buckets.get(b) ?? 0) + 1)
+  }
+
+  // Tag category counts: active categories get a leave-one-out pass; the rest reuse
+  // the full match set (their basis is just "all active filters").
+  for (const cat of cats) {
+    const m = tags.get(cat)!
+    const basis = catC.has(cat) ? prepared.filter((p) => matchesExcept(p, 'tag:' + cat)) : fullMatch
+    for (const p of basis) for (const t of p.w.tags) if (t.category === cat) m.set(t.name, (m.get(t.name) ?? 0) + 1)
+  }
+
+  return { total: fullMatch.length, tags, status, rating, buckets }
+}

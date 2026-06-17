@@ -4,7 +4,7 @@ import { FilterChip, nextChipState } from './FilterChip'
 import { CategoryBox } from './CategoryBox'
 import {
   WORDCOUNT_BUCKETS, emptyCatFilter, activeCount,
-  type CatFilter, type Facets, type FilterState,
+  type CatFilter, type Facets, type FilterState, type DependentFacets,
 } from '../data/filters'
 import type { Rating, ReadStatus } from '../data/types'
 
@@ -21,11 +21,15 @@ export function FilterPanel({
   value,
   onChange,
   facets,
+  live,
   onSaveFilter,
 }: {
   value: FilterState
   onChange: (next: FilterState) => void
   facets: Facets
+  /* Co-occurrence-aware live counts (leave-one-out per facet). When present, tag
+     boxes show live counts and hide zero-match options. */
+  live?: DependentFacets
   onSaveFilter?: (name: string, starred: boolean) => void
 }) {
   const [saving, setSaving] = useState(false)
@@ -107,9 +111,14 @@ export function FilterPanel({
         {/* Condensed quick filters: label + chips on one row each */}
         <div className="fpanel__quick">
           <Row label="Status">
-            {STATUSES.map((s) => (
-              <FilterChip key={s} label={s} state={value.status[s] ?? 'default'} onCycle={() => cycleStatus(s)} />
-            ))}
+            {STATUSES.map((s) => {
+              const st = value.status[s] ?? 'default'
+              const n = live?.status.get(s) ?? 0
+              return (
+                <FilterChip key={s} label={s} state={st} count={live ? n : undefined}
+                  disabled={!!live && n === 0 && st === 'default'} onCycle={() => cycleStatus(s)} />
+              )
+            })}
             <button
               className={'fpanel__favtoggle' + (value.favorite ? ' is-on' : '')}
               aria-pressed={value.favorite}
@@ -120,17 +129,27 @@ export function FilterPanel({
           </Row>
 
           <Row label="Words">
-            {WORDCOUNT_BUCKETS.map((b) => (
-              <button key={b} className={'fpanel__bucket' + (value.buckets.includes(b) ? ' is-on' : '')} onClick={() => toggleBucket(b)}>
-                {b}
-              </button>
-            ))}
+            {WORDCOUNT_BUCKETS.map((b) => {
+              const on = value.buckets.includes(b)
+              const n = live?.buckets.get(b) ?? 0
+              const disabled = !!live && n === 0 && !on
+              return (
+                <button key={b} className={'fpanel__bucket' + (on ? ' is-on' : '')} disabled={disabled} onClick={() => toggleBucket(b)}>
+                  {b}{live && <span className="fpanel__bucketcount">{n.toLocaleString()}</span>}
+                </button>
+              )
+            })}
           </Row>
 
           <Row label="Rating">
-            {RATINGS.map((r) => (
-              <FilterChip key={r} label={RATING_SHORT[r]} state={value.rating[r] ?? 'default'} onCycle={() => cycleRating(r)} />
-            ))}
+            {RATINGS.map((r) => {
+              const st = value.rating[r] ?? 'default'
+              const n = live?.rating.get(r) ?? 0
+              return (
+                <FilterChip key={r} label={RATING_SHORT[r]} state={st} count={live ? n : undefined}
+                  disabled={!!live && n === 0 && st === 'default'} onCycle={() => cycleRating(r)} />
+              )
+            })}
           </Row>
         </div>
 
@@ -141,6 +160,7 @@ export function FilterPanel({
             key={category}
             category={category}
             tags={tags}
+            counts={live?.tags.get(category)}
             defaultOpen={false}
             value={value.tags[category] ?? emptyCatFilter()}
             onChange={(next) => setCat(category, next)}

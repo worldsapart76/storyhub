@@ -17,6 +17,7 @@ export function FilterChip({
   grouped,
   favorite,
   temporary,
+  disabled,
   onCycle,
   onFavorite,
   onRemove,
@@ -27,6 +28,9 @@ export function FilterChip({
   grouped?: boolean
   favorite?: boolean
   temporary?: boolean
+  /* Dim + non-interactive: a zero-match option under the current selection.
+     Only applied when the chip isn't already selected (so it stays deselectable). */
+  disabled?: boolean
   onCycle?: () => void
   onFavorite?: () => void
   onRemove?: () => void
@@ -36,8 +40,8 @@ export function FilterChip({
     fn?.()
   }
   return (
-    <span className={`chip chip--${state}` + (grouped ? ' chip--grouped' : '') + (temporary ? ' chip--temp' : '')}>
-      <button className="chip__body" onClick={onCycle} aria-pressed={state !== 'default'} title={grouped ? `${label} (group)` : label}>
+    <span className={`chip chip--${state}` + (grouped ? ' chip--grouped' : '') + (temporary ? ' chip--temp' : '') + (disabled ? ' chip--disabled' : '')}>
+      <button className="chip__body" onClick={onCycle} disabled={disabled} aria-pressed={state !== 'default'} title={grouped ? `${label} (group)` : label}>
         {grouped && <span className="chip__groupmark" aria-hidden>◇</span>}
         <span className="chip__label">{label}</span>
         {count !== undefined && <span className="chip__count">{count}</span>}

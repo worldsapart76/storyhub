@@ -9,7 +9,7 @@ import { FunnelIcon, SortIcon } from './Icons'
 import { SORT_OPTIONS } from '../mock/data'
 import { useLibrary } from '../data/library'
 import { useNav } from '../data/appnav'
-import { applyFilters, buildFacets, emptyFilter, activeCount, type FilterState } from '../data/filters'
+import { applyFilters, buildFacets, dependentFacets, emptyFilter, activeCount, type FilterState } from '../data/filters'
 import { createSavedFilter, fetchReadingLists, fetchSavedFilters, type ReadingListRow, type SavedFilterRow } from '../data/lists'
 import { fetchFavoriteTagNames } from '../data/tags'
 import type { Work } from '../data/types'
@@ -71,22 +71,28 @@ export function BrowseView() {
     ...quickLists.filter((l) => !l.isSystem),
   ], [quickLists, favoriteIds])
 
-  const results = useMemo(() => {
+  // Works in scope before the filter panel (text search + active reading-list chip).
+  // The dependent facets are computed against this set so search / a list chip
+  // narrow the available filter options too.
+  const searched = useMemo(() => {
     const q = query.trim().toLowerCase()
     let base = works
     if (activeList) {
       const member = new Set(activeList.memberIds)
       base = base.filter((w) => member.has(w.workId))
     }
-    const searched = q
+    return q
       ? base.filter((w) =>
           w.title.toLowerCase().includes(q) ||
           w.authors.some((a) => a.toLowerCase().includes(q)) ||
           w.summary.toLowerCase().includes(q) ||
           (w.primaryShip ?? '').toLowerCase().includes(q))
       : base
-    return [...applyFilters(searched, filter)].sort(comparator(sort.label))
-  }, [works, query, sort, filter, activeList])
+  }, [works, query, activeList])
+
+  const results = useMemo(() => [...applyFilters(searched, filter)].sort(comparator(sort.label)), [searched, filter, sort])
+  // Co-occurrence-aware facet counts for the panel (leave-one-out per facet).
+  const facetLive = useMemo(() => dependentFacets(searched, filter), [searched, filter])
 
   const filterCount = activeCount(filter)
 
@@ -263,7 +269,7 @@ export function BrowseView() {
         {/* Drawer scrim only when overlaying (narrow + open) */}
         {panelOpen && !wide && <div className="browse__scrim" onClick={() => setUserOpen(false)} />}
         <aside className={'browse__panel' + (panelOpen ? ' is-open' : '')} aria-hidden={!panelOpen}>
-          <FilterPanel value={filter} onChange={setFilter} facets={facets} onSaveFilter={saveCurrentFilter} />
+          <FilterPanel value={filter} onChange={setFilter} facets={facets} live={facetLive} onSaveFilter={saveCurrentFilter} />
         </aside>
       </div>
 
