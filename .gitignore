@@ -21,10 +21,16 @@ build/
 !.env.example
 .railway-token
 .ao3-cookie
+.anthropic-key
 
 # Phase D migration scratch (scraped data; discarded after go-live)
 migration_cache.sqlite*
 *.sqlite
+# generated audit working files (regenerable; tag_curation.json + audit_decisions.json ARE committed)
+audit_deleted.json
+audit.html
+# LLM classifier scratch (inputs + raw outputs); curated tag_curation.json IS committed
+llm_*.json
 
 # OS / editor
 .DS_Store

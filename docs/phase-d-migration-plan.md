@@ -150,3 +150,79 @@ A standalone local script (`railway/migrate.py`, stages above) using asyncpg
 Calibre REST client, an AO3 scraper+parser, and boto3 for R2. Reuses
 `seeding.py` for ship/collection grouping heuristics. Not built until this plan
 is signed off.
+
+## 7. Special / one-time load scenarios (captured 2026-06-16)
+Full-scrape result (`migration_cache.ao3_scrape`, 6 907 AO3 works): **6 719 ok ·
+102 deleted · 31 failed · 30 mystery** (+ 437 NO_AO3 negative-id local works).
+Three loads need handling beyond the happy path:
+
+### 7.1 Deleted-on-AO3 (102) — salvage from Calibre, hands-on categorization
+AO3 returns 404; the scrape row has no metadata. **Source of truth = the
+`calibre_books` row** (title/authors/tags/collection/primaryship/wordcount/
+readstatus/comments/languages) + the **Calibre epub** (→ R2 via `epub_backfill`).
+Set `availability` to mark "removed from AO3, epub retained" (no AO3 actions ever
+queue for these — the bookmark/MfL target is gone).
+- **Implemented as an offline review UI (not an inline interactive loader):**
+  1. `audit_deleted.py` recovers the 102 from R2 epubs (epub-authoritative) +
+     Calibre cache → `audit_deleted.json` (regenerable; gitignored).
+  2. `audit_html.py` emits a self-contained `audit.html` review page: per work the
+     summary, recovered tags by kind, the Calibre ref (conflicts highlighted), a
+     **primary collection** typeahead (all fandoms/collections seen), a dependent
+     **primary ship** typeahead (ships co-occurring with the chosen collection — so
+     even no-tag anthologies get primaries), a **rating** picker, and a **kind-check**
+     for tags the heuristic recovery may have mis-typed.
+  3. Decisions persist in localStorage and export to **`audit_decisions.json`
+     (COMMITTED — irreplaceable human work, not regenerable).**
+- **Freeform categorization was pulled OUT of the audit (2026-06-16).** Category is
+  a GLOBAL tag property; the per-story lens biases borderline calls and risks
+  silently flipping a prior decision. Freeforms are read-only context chips in the
+  audit; their categories live in `tag_curation.json` (LLM pass) and the global
+  Tag Management bucket review. The audit captures only the per-story decisions that
+  genuinely need the story in front of you: **primary ship/collection + rating**,
+  plus **kind-check** (recovery-specific). This is the per-work Review Queue for
+  these salvage works (hard rule: primaries assigned per-work, never bypassed).
+- **STATUS: audit COMPLETE 2026-06-16** — all 102 reviewed. Validated: 102/102 have
+  a collection, no invalid ratings; 7 null primary_ship + 2 null rating are
+  intentional gen/anthology cases; 6 kind fixes. The epub-authoritative call was
+  vindicated (e.g. work 390961: Calibre said Jane Austen, epub/decision = Teen Wolf).
+- **Loader contract — what the (not-yet-built) 102 load must do** with
+  `audit_deleted.json` + `audit_decisions.json`:
+  - Insert the 102 works + epubs (reuse the Phase D load machinery / `commit.py`
+    path; key `epubs/{work_id}.epub`). Set `availability` = removed-from-AO3; never
+    queue AO3 actions for these.
+  - Apply `tagKind[name]` overrides (6) before inserting `work_tags` — corrects the
+    heuristic recovery typing (e.g. "The Mandalorian (TV)" → fandom).
+  - Apply per-work `primary_ship` / `primary_collection` / `rating`.
+  - **3 works (26951341, 29804907, 30907769) had NO recovered relationships** — their
+    chosen primary_ship was picked from collection suggestions, so the loader must
+    **add that ship as a relationship tag** on the work, not just stamp it primary
+    (else the primary dangles). The other 92 ships already match a recovered rel; 0
+    mismatches.
+  - Do NOT apply freeform categories from the audit (none exported) — categories
+    come from `tag_curation.json`.
+
+### 7.2 Failed (31) + mystery (30) → defer to Phase E authed re-scrape
+- **failed (31):** transient (mostly `TimeoutError`, http=None) — retry candidates.
+- **mystery (30):** http 200 but unparseable — registered-only / adult-interstitial
+  pages that need a **logged-in** fetch (see §5 restricted-works item).
+- **Plan:** park these 61 work_ids (they're in `ao3_scrape` with status
+  failed/mystery — not silently dropped). Re-scrape through the **extension's
+  authenticated session** once Phase E exists; until then either Calibre-fallback
+  them or hold. User preference (2026-06-16): defer to the authed re-scrape.
+
+### 7.3 Existing Marked-for-Later backlog (~couple hundred) — never processed
+AO3 works the user **Marked for Later** but never ran through old FFF → **not in
+Calibre, not in the scrape, not queued.** A separate one-time **bulk capture**,
+not part of the Calibre migration:
+1. Enumerate the logged-in AO3 "Marked for Later" list (paged) → work_ids.
+2. For each *complete* work, fetch metadata + epub and POST `/api/queue` — the
+   **normal** import pipeline (normalize → auto-commit / per-work Review Queue →
+   R2 → snapshot). Incomplete works are skipped (only complete works are added).
+3. These are **fresh imports** (read_status defaults to Unread), distinct from the
+   Calibre set. Doable via the extension (Phase E MfL hook applied in bulk) or a
+   one-time authed script mirroring the scraper. No FanFicFare (hard rule).
+- **Make it a repeatable extension feature, not just a one-time script
+  (2026-06-16):** build an **ad-hoc "catch up from Marked for Later"** action into
+  the extension — scans the current MfL list and bulk-queues anything not already
+  in StoryHub. The user doesn't *plan* to add to MfL outside StoryHub, but wants a
+  reconciliation button for when it happens. (Phase E.)

@@ -2,10 +2,16 @@
 
 Reads audit_deleted.json (from audit_deleted.py prep) and embeds it into a single
 offline HTML page. Per work: clean summary, recovered tags by kind, the Calibre
-reference line with conflicts highlighted, a primary-ship picker, kind fixes for
-flagged tags, and category pickers for freeform tags backed by a GLOBAL map (set a
-tag's category once, in context, and it applies to every work). Progress persists
-in localStorage; "Export decisions" downloads the JSON to feed back into the load.
+reference line with conflicts highlighted, a primary-ship picker, and kind fixes for
+flagged tags. Freeform tags are shown READ-ONLY for context — a freeform's category
+is a GLOBAL tag property, so it is not edited per-story here (the per-story lens
+biases borderline calls); that happens in Tag Management against the full corpus,
+seeded by tag_curation.json from the LLM pass. Progress persists in localStorage;
+"Export decisions" downloads the JSON to feed back into the load.
+
+Exported decisions: `tagKind[name]` (kind-check fixes) and `works[work_id]`
+(primary_ship / primary_collection / rating / reviewed). Freeform categorization is
+intentionally NOT exported — it lives in tag_curation.json / Tag Management.
 
 Usage:  python audit_html.py   ->  audit.html
 """
@@ -18,10 +24,6 @@ HERE = Path(__file__).parent
 DATA = HERE / "audit_deleted.json"
 OUT = HERE / "audit.html"
 
-# The seeded freeform category set (redesign §6.3.1). Reorder/rename later in Tag
-# Management; for this one-time audit the seeded names are what tags map to.
-CATEGORIES = ["Identity", "Universe", "Content", "Trope", "Dynamics",
-              "Mood", "Structure", "Other"]
 KINDS = ["fandom", "relationship", "character", "freeform", "warning"]
 
 works = json.loads(DATA.read_text(encoding="utf-8"))
@@ -33,11 +35,28 @@ cf = HERE / "tag_curation.json"
 if cf.exists():
     cur = json.loads(cf.read_text(encoding="utf-8")).get("tags", {})
 ff_names = {t for w in works for t in w.get("freeforms", [])}
-auto_cat = {n: cur[n]["category"] for n in ff_names if n in cur and cur[n].get("category")}
+# excluded: freeforms the LLM flagged as noise — dimmed in the read-only chip view.
 excluded = sorted(n for n in ff_names if n in cur and cur[n].get("state") == "excluded")
 
-payload = json.dumps({"works": works, "categories": CATEGORIES, "kinds": KINDS,
-                      "autoCat": auto_cat, "excluded": excluded},
+# Cross-work primaries index: lets a work that recovered NO tags (e.g. anthologies)
+# still get a primary collection + ship. Index ships by EVERY name a collection might
+# carry — both the collection name (Calibre #collection, e.g. "Harry Potter") and the
+# full fandom tag (e.g. "Harry Potter - J. K. Rowling") — so the ship list narrows
+# regardless of which the user picks. Collection suggestions = union of both.
+ship_index = {}
+for w in works:
+    rels = w.get("relationships", [])
+    keys = set(w.get("fandoms", []))
+    if w.get("primary_collection"):
+        keys.add(w["primary_collection"])
+    for k in keys:
+        ship_index.setdefault(k, set()).update(rels)
+ship_index = {k: sorted(v) for k, v in sorted(ship_index.items()) if v}
+coll_options = sorted({f for w in works for f in w.get("fandoms", [])}
+                      | {w["primary_collection"] for w in works if w.get("primary_collection")})
+
+payload = json.dumps({"works": works, "kinds": KINDS, "excluded": excluded,
+                      "collOptions": coll_options, "shipsByKey": ship_index},
                      ensure_ascii=False).replace("</", "<\\/")
 
 HTML = """<!doctype html>
@@ -69,11 +88,13 @@ HTML = """<!doctype html>
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
   .row label{font-size:12px;color:var(--mut);min-width:120px}
   select,input[type=text]{background:#0f1115;color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px}
+  .row input.pinput{flex:1;min-width:280px}
   .grp{margin:9px 0}
   .grp .lab{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
   .chips{display:flex;gap:6px;flex-wrap:wrap}
   .chip{font-size:12.5px;padding:3px 9px;border-radius:7px;background:#252a32;border:1px solid var(--line)}
   .chip.fl{border-color:var(--warn)}
+  .chip.ex{opacity:.5;border-style:dashed}
   .ff{display:flex;gap:6px;align-items:center;background:#252a32;border:1px solid var(--line);border-radius:7px;padding:2px 4px 2px 9px}
   .ff.set{border-color:#33523a}
   .ff.ex{opacity:.55;border-style:dashed}
@@ -95,11 +116,12 @@ HTML = """<!doctype html>
   <button class="exp" id="export">⬇ Export decisions</button>
 </header>
 <main id="list"></main>
+<datalist id="dl-collections"></datalist>
 <script>
 const D = __PAYLOAD__;
 const LS = "storyhub-audit-deleted";
 const st = JSON.parse(localStorage.getItem(LS) || "{}");
-st.tagCategory ||= {}; st.tagKind ||= {}; st.works ||= {};
+st.tagKind ||= {}; st.works ||= {};
 const save = () => localStorage.setItem(LS, JSON.stringify(st));
 let filter = "all";
 
@@ -124,7 +146,10 @@ function render(){
     const cal=w.calibre;
     const ratingSel = w.rating? `<span class="badge">${w.rating}</span>` :
       `<select data-act="rating" data-w="${w.work_id}"><option value="">⚠ rating?</option>${["Explicit","Mature","Teen","General","Not Rated"].map(r=>opt(r,s.rating)).join("")}</select>`;
-    const ships = w.relationships.length? w.relationships : [];
+    // ship options narrow to the chosen collection: this work's recovered ships
+    // plus any ship co-occurring with the selected fandom across the 102.
+    const shipOpts = Array.from(new Set([...(w.relationships||[]),
+      ...((D.shipsByKey||{})[s.primary_collection]||[])])).sort();
     c.innerHTML = `
       <div class="top">
         <h2>${esc(w.title||"(untitled)")}</h2>
@@ -136,24 +161,22 @@ function render(){
       <div class="cal ${calBad?'bad':''}">Calibre ref —
         ship: ${calBad?`<s>${esc(cal.primaryship||'∅')}</s> ⚠ overridden by epub`:esc(cal.primaryship||'∅')} ·
         collection: ${calBad?`<s>${esc(cal.collection||'∅')}</s>`:esc(cal.collection||'∅')}</div>
-      <div class="row"><label>Primary ship</label>
-        <select data-act="ship" data-w="${w.work_id}">${opt('',s.primary_ship)}${ships.map(r=>opt(r,s.primary_ship)).join("")}</select>
-        ${ships.length?'':'<span class="hint">no relationships recovered</span>'}</div>
       <div class="row"><label>Primary collection</label>
-        <input type="text" data-act="coll" data-w="${w.work_id}" value="${esc(s.primary_collection||'')}"></div>
+        <input type="text" list="dl-collections" class="pinput" placeholder="choose a fandom / collection…" data-act="coll" data-w="${w.work_id}" value="${esc(s.primary_collection||'')}"></div>
+      <div class="row"><label>Primary ship</label>
+        <input type="text" list="dl-ships-${w.work_id}" class="pinput" placeholder="${shipOpts.length?'choose a ship…':'pick a collection or type one'}" data-act="ship" data-w="${w.work_id}" value="${esc(s.primary_ship||'')}">
+        <datalist id="dl-ships-${w.work_id}">${shipOpts.map(r=>`<option value="${esc(r)}">`).join("")}</datalist></div>
       ${grp("Fandoms", w.fandoms, w.fandoms.length?'':'<span class="miss">⚠ none recovered</span>')}
       ${grp("Relationships", w.relationships)}
       ${grp("Characters", w.characters)}
       ${flagged.length?`<div class="grp"><div class="lab">⚠ Kind check (looked like character/fandom)</div>
         ${flagged.map(t=>`<div class="flagrow">${esc(t)} <select data-act="kind" data-w="${w.work_id}" data-t="${esc(t)}">
           ${D.kinds.map(k=>opt(k, st.tagKind[t]||'freeform')).join("")}</select></div>`).join("")}</div>`:''}
-      <div class="grp"><div class="lab">Freeform — category (auto-filled; ✎ = excluded as noise, pick a category to keep)</div>
+      ${w.freeforms.length?`<div class="grp"><div class="lab">Freeform tags — read-only (category is managed globally in Tag Management; ⊘ = flagged noise)</div>
         <div class="chips">${w.freeforms.map(t=>{
-          const isExc=(D.excluded||[]).includes(t) && !(t in st.tagCategory);
-          const cur = (t in st.tagCategory) ? st.tagCategory[t] : (isExc ? "" : (D.autoCat[t]||""));
-          return `<span class="ff ${cur?'set':''} ${isExc?'ex':''}">${esc(t)}
-            <select data-act="cat" data-t="${esc(t)}"><option value="">${isExc?'⊘ excluded':'uncategorized'}</option>${D.categories.map(cat=>opt(cat,cur)).join("")}</select></span>`;
-        }).join("")||'<span class="hint">none</span>'}</div></div>
+          const isExc=(D.excluded||[]).includes(t);
+          return `<span class="chip ${isExc?'ex':''}">${esc(t)}${isExc?' ⊘':''}</span>`;
+        }).join("")}</div></div>`:''}
       ${grp("Warnings", w.warnings)}
       <div class="done"><label><input type="checkbox" data-act="rev" data-w="${w.work_id}" ${s.reviewed?'checked':''}> Reviewed</label></div>`;
     list.appendChild(c);
@@ -166,11 +189,10 @@ function esc(s){ return (s==null?"":(""+s)).replace(/[&<>"]/g,m=>({"&":"&amp;","
 
 document.addEventListener("change",e=>{
   const t=e.target, act=t.dataset.act; if(!act) return;
-  if(act==="cat"){ if(t.value) st.tagCategory[t.dataset.t]=t.value; else delete st.tagCategory[t.dataset.t]; save(); render(); return; }
   if(act==="kind"){ st.tagKind[t.dataset.t]=t.value; save(); return; }
   const w=st.works[t.dataset.w]; if(!w) return;
-  if(act==="ship") w.primary_ship=t.value||null;
-  if(act==="coll") w.primary_collection=t.value||null;
+  if(act==="ship"){ w.primary_ship=t.value||null; save(); return; }
+  if(act==="coll"){ w.primary_collection=t.value||null; save(); render(); return; }  // re-render: ship list depends on collection
   if(act==="rating") w.rating=t.value||null;
   if(act==="rev"){ w.reviewed=t.checked; save(); render(); return; }
   save();
@@ -179,10 +201,11 @@ document.querySelectorAll("header button[data-f]").forEach(b=>b.onclick=()=>{
   filter=b.dataset.f; document.querySelectorAll("header button[data-f]").forEach(x=>x.classList.toggle("on",x===b)); render();
 });
 document.getElementById("export").onclick=()=>{
-  const out={tagCategory:st.tagCategory,tagKind:st.tagKind,works:st.works};
+  const out={tagKind:st.tagKind,works:st.works};
   const blob=new Blob([JSON.stringify(out,null,1)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="audit_decisions.json"; a.click();
 };
+document.getElementById("dl-collections").innerHTML=(D.collOptions||[]).map(f=>`<option value="${esc(f)}">`).join("");
 render();
 </script></body></html>"""
 

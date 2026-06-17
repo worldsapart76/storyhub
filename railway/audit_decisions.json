@@ -1,0 +1,624 @@
+{
+ "tagKind": {
+  "The Mandalorian (TV)": "fandom",
+  "Leia Organa & Original Character(s)": "character",
+  "Ben Solo & Original Character(s)": "character",
+  "Ben Solo & Original Female Character(s)": "character",
+  "The Armorer (The Mandalorian TV)": "character",
+  "E.T.: The Extra-Terrestrial (1982)": "fandom"
+ },
+ "works": {
+  "153238": {
+   "primary_ship": "Draco Malfoy/Hermione Granger",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "390961": {
+   "primary_ship": "Derek Hale/Stiles Stilinski",
+   "primary_collection": "Teen Wolf",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "631614": {
+   "primary_ship": "Neville Longbottom/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "652387": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "1808485": {
+   "primary_ship": "Neville Longbottom/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "8247304": {
+   "primary_ship": "Kylo Ren/Rey",
+   "primary_collection": "Star Wars",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "8897227": {
+   "primary_ship": "Draco Malfoy/Hermione Granger",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "9418115": {
+   "primary_ship": "Hermione Granger/Draco Malfoy/Theodore Nott",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "12109998": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "16820299": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "17490746": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "17650172": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "20049832": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "20267548": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "21053894": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "21364951": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "21496525": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "24041644": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "24073999": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "24254056": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "24365710": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "24484894": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "25939576": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "26050468": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "26220835": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "26621266": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "26951341": {
+   "primary_ship": "Draco Malfoy/Hermione Granger",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "28742985": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "29021424": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "29525406": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "29804907": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": null,
+   "reviewed": true
+  },
+  "30042813": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "30907769": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": null,
+   "reviewed": true
+  },
+  "32134570": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "32136715": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "32700673": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "35213422": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "35228293": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "36501784": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "36875527": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "37210405": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "38428093": {
+   "primary_ship": "Hermione Granger/Remus Lupin/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "39296112": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "40964859": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "43540960": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "43884010": {
+   "primary_ship": "Leia Organa & Luke Skywalker",
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "44138050": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "44686924": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "46341619": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Not Rated",
+   "reviewed": true
+  },
+  "46449277": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "47132110": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "47515615": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "49008550": {
+   "primary_ship": "Hermione Granger/Draco Malfoy/Theodore Nott",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "49821403": {
+   "primary_ship": "Leia Organa/Han Solo",
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "50413933": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "51863629": {
+   "primary_ship": "Leia Organa/Han Solo",
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "52272751": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "52310923": {
+   "primary_ship": "Mara Jade/Luke Skywalker",
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "52325725": {
+   "primary_ship": "Ben Solo/Original Female Character(s)",
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "52359184": {
+   "primary_ship": "Ben Solo/Original Female Character(s)",
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "52858153": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "53066416": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "53092813": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "53845957": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "54049333": {
+   "primary_ship": "Hermione Granger/Draco Malfoy",
+   "primary_collection": "Harry Potter",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "55260487": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "56878192": {
+   "primary_ship": "Elizabeth Bennet/Fitzwilliam Darcy",
+   "primary_collection": "Jane Austen",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "57588190": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "60570832": {
+   "primary_ship": "Han Jisung | Han/Lee Minho | Lee Know",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "62200453": {
+   "primary_ship": "Derek Hale/Stiles Stilinski",
+   "primary_collection": "Teen Wolf",
+   "rating": "Not Rated",
+   "reviewed": true
+  },
+  "62237896": {
+   "primary_ship": null,
+   "primary_collection": "Star Wars",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "62599534": {
+   "primary_ship": "Derek Hale/Stiles Stilinski",
+   "primary_collection": "Teen Wolf",
+   "rating": "Teen",
+   "reviewed": true
+  },
+  "63486958": {
+   "primary_ship": "Han Jisung | Han/Kim Seungmin",
+   "primary_collection": "Stray Kids",
+   "rating": "Not Rated",
+   "reviewed": true
+  },
+  "64169545": {
+   "primary_ship": "Han Jisung | Han/Hwang Hyunjin",
+   "primary_collection": "Stray Kids",
+   "rating": "General",
+   "reviewed": true
+  },
+  "66147340": {
+   "primary_ship": "Hwang Hyunjin/Kim Seungmin",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "71276546": {
+   "primary_ship": "Hwang Hyunjin/Yang Jeongin | I.N",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "71510201": {
+   "primary_ship": "Bang Chan/Hwang Hyunjin",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "72319141": {
+   "primary_ship": "Han Jisung | Han/Lee Minho | Lee Know",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "73393956": {
+   "primary_ship": "Lee Felix/Yang Jeongin | I.N",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "74466161": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74478686": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74520711": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74560106": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74671721": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74733386": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74783836": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "Stray Kids",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74870096": {
+   "primary_ship": "Hwang Hyunjin/Jung Wooyoung (ATEEZ)",
+   "primary_collection": "Stray Kids",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "74975866": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75102216": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75157716": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75310546": {
+   "primary_ship": "Choi San/Jeong Yunho (ATEEZ)",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75360331": {
+   "primary_ship": "Han Jisung | Han/Lee Minho | Lee Know",
+   "primary_collection": "Stray Kids",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75464916": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75557136": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75672111": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "Stray Kids",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "75955866": {
+   "primary_ship": "Kang Yeosang/Kim Seungmin (Stray Kids)",
+   "primary_collection": "ATEEZ",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "76090781": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "ATEEZ",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "76146586": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "Stray Kids",
+   "rating": "Mature",
+   "reviewed": true
+  },
+  "76269166": {
+   "primary_ship": "Bang Chan (Stray Kids)/Kim Hongjoong",
+   "primary_collection": "ATEEZ",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "76956921": {
+   "primary_ship": "Han Jisung | Han/Lee Minho | Lee Know",
+   "primary_collection": "ATEEZ",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "77399271": {
+   "primary_ship": "Bang Chan/Hwang Hyunjin",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  },
+  "77525501": {
+   "primary_ship": "Lee Felix (Stray Kids)/Park Seonghwa",
+   "primary_collection": "Stray Kids",
+   "rating": "Explicit",
+   "reviewed": true
+  }
+ }
+}
