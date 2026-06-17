@@ -395,7 +395,7 @@ def load(db_url, only_sample=True):
 
 async def _load_async(db_url, only_sample):
     import asyncpg
-    from collections import Counter, defaultdict
+    from collections import defaultdict
     from app.normalize import map_rating  # reuse AO3 rating-label mapping
 
     cache = db()
@@ -411,17 +411,17 @@ async def _load_async(db_url, only_sample):
             cache.execute("SELECT work_id, r2_key, sha256 FROM epub_backfill WHERE status='ok'")}
     print(f"loading {len(works)} works to Postgres ({len(epub)} epubs backfilled)...")
 
-    # Global maps: ship display alias (majority #primaryship per raw primary ship)
-    # and collection-group membership (primary fandom per #collection).
-    ship_votes = defaultdict(Counter)
+    # Collection-group membership (primary fandom per #collection). NOTE: we do NOT
+    # derive tag display aliases from Calibre #primaryship. That mapped a story's
+    # short ship label onto whatever relationship was listed FIRST, keyed globally by
+    # tag name — smearing e.g. "Malex" across dozens of unrelated Alex ships (incl.
+    # platonic "&" tags) and leaking non-ship labels like "General Fic". #primaryship
+    # is a per-story value; display_name is a per-tag field, left to manual curation.
     coll_members = defaultdict(set)
     for w in works:
-        rels, fandoms = _jl(w["relationships"]), _jl(w["fandoms"])
-        if rels and w["primaryship"] and w["primaryship"] != "Poly":
-            ship_votes[rels[0]][w["primaryship"]] += 1
+        fandoms = _jl(w["fandoms"])
         if fandoms and w["collection"]:
             coll_members[w["collection"]].add(fandoms[0])
-    ship_display = {rel: v.most_common(1)[0][0] for rel, v in ship_votes.items()}
 
     conn = await asyncpg.connect(db_url)
     try:
@@ -434,7 +434,7 @@ async def _load_async(db_url, only_sample):
             for name, kind in seen:
                 t_names.append(name)
                 t_kinds.append(kind)
-                t_disp.append(ship_display.get(name) if kind == "relationship" else None)
+                t_disp.append(None)  # display_name is manual curation, never auto-set (see note above)
             tag_id = {}
             for r in await conn.fetch(
                     "INSERT INTO tags (name, kind, display_name) "
