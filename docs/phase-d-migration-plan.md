@@ -154,7 +154,8 @@ is signed off.
 ## 7. Special / one-time load scenarios (captured 2026-06-16)
 Full-scrape result (`migration_cache.ao3_scrape`, 6 907 AO3 works): **6 719 ok ·
 102 deleted · 31 failed · 30 mystery** (+ 437 NO_AO3 negative-id local works).
-Three loads need handling beyond the happy path:
+Four loads need handling beyond the happy path (§7.1 deleted + §7.4 NO_AO3 DONE
+2026-06-17; §7.2 failed/mystery + §7.3 MfL await Phase E):
 
 ### 7.1 Deleted-on-AO3 (102) — salvage from Calibre, hands-on categorization
 > **DONE & LIVE 2026-06-17.** `load_deleted.py` loaded all 102 (availability='deleted')
@@ -232,3 +233,23 @@ not part of the Calibre migration:
   the extension — scans the current MfL list and bulk-queues anything not already
   in StoryHub. The user doesn't *plan* to add to MfL outside StoryHub, but wants a
   reconciliation button for when it happens. (Phase E.)
+
+### 7.4 NO_AO3 local / pre-AO3 works (437)
+> **DONE & LIVE 2026-06-17.** `load_local.py`.
+
+Calibre books with no AO3 id (`is_ao3=0`, `work_id='NO_AO3'`) — pre-AO3 / non-AO3
+imports. They have title/authors/#collection/#primaryship/wordcount/series/read-status
++ a Calibre epub, but **no AO3 tags** (the only Calibre "tag" is a wordcount bucket).
+- **Loaded as `source='pre_ao3'`, `availability='n/a'`, with negative work_ids**
+  (`= -calibre_id` — the schema's pre-AO3 id convention).
+- Epub backfilled Calibre→R2 at `epubs/{neg}.epub` (recorded in `epub_backfill`).
+- **Primary collection** = a fandom tag named after `#collection`, placed in a
+  same-named collection group (uses the collection NAME, not the group's
+  representative fandom, to avoid a rep-quirk e.g. Dragon Age→Mass Effect).
+- **Primary ship** = `#primaryship` when it looks like a ship (contains `/`, not
+  General/Poly). Short FFF ship/fandom names can be synonym'd to AO3 canonicals later.
+- No rating/characters/freeforms. Metadata (wordcount/series/language/date/read-status)
+  from `calibre_books`.
+- Result: 437/437 epubs backfilled, all w/ primary collection, 431 w/ primary ship.
+  Total works 6,821 → **7,258**; snapshot rebuilt (v5). Calibre auth was temporarily
+  removed for the backfill run.
