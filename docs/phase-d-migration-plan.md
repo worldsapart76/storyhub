@@ -157,6 +157,12 @@ Full-scrape result (`migration_cache.ao3_scrape`, 6 907 AO3 works): **6 719 ok �
 Three loads need handling beyond the happy path:
 
 ### 7.1 Deleted-on-AO3 (102) — salvage from Calibre, hands-on categorization
+> **DONE & LIVE 2026-06-17.** `load_deleted.py` loaded all 102 (availability='deleted')
+> from `audit_deleted.json` + `audit_decisions.json` + epub_backfill, per the contract
+> below: kind fixes applied, primaries set (95 ship / 102 collection; 7 gen works no
+> ship), 3 no-tag works got a synthesized fandom + ship. Curation re-applied, snapshot
+> rebuilt (v4, total 6,821 works). Metadata (wordcount/series/language/date) enriched
+> from `calibre_books`.
 AO3 returns 404; the scrape row has no metadata. **Source of truth = the
 `calibre_books` row** (title/authors/tags/collection/primaryship/wordcount/
 readstatus/comments/languages) + the **Calibre epub** (→ R2 via `epub_backfill`).
