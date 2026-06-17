@@ -43,3 +43,6 @@ Thumbs.db
 
 # Logs / runtime
 *.log
+
+# Chrome unpacked-extension generated metadata
+extension/_metadata/

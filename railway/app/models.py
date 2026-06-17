@@ -284,6 +284,9 @@ class RawCapture(BaseModel):
     series_index: float | None = None
     language: str | None = None
     authors: list[str] = []                # byline order
+    epub_url: str | None = None            # AO3 download URL (stored for reference;
+                                           # the extension content script fetches the
+                                           # epub + POSTs bytes to /queue/{id}/epub)
 
 
 class TagProposal(BaseModel):

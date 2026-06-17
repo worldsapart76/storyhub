@@ -8,10 +8,11 @@ items commit; ambiguous items wait for POST /review (primaries only) -> commit.
 
 from __future__ import annotations
 
+import hashlib
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from .. import commit, r2
 from ..db import get_conn
@@ -83,6 +84,43 @@ async def capture(
         presigned_put_url=presigned,
         needs_review=not proposals.auto,
     )
+
+
+@router.post("/{queue_item_id}/epub", response_model=QueueItem)
+async def upload_epub(
+    queue_item_id: UUID,
+    request: Request,
+    conn: asyncpg.Connection = Depends(get_conn),
+) -> QueueItem:
+    """Receive epub bytes from the extension (content-script fetch from AO3) and
+    stage them to R2, then commit if approved. The extension fetches the epub in
+    the AO3 page context — AO3's Cloudflare blocks both the extension service
+    worker (browser fingerprint) and Railway's datacenter IP, so the bytes are
+    POSTed here as the body rather than fetched server-side or PUT to R2 directly
+    (R2 has no browser CORS). Railway stages + the normal commit copies
+    staging -> /epubs/{work_id}.epub."""
+    row = await conn.fetchrow(
+        "SELECT staging_key, proposals FROM queue_items WHERE queue_item_id=$1",
+        queue_item_id,
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Queue item not found")
+    if not r2.is_configured():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "R2 not configured")
+    data = await request.body()
+    if not data:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Empty epub body")
+
+    await r2.put_bytes(row["staging_key"], data, "application/epub+zip")
+    proposals = NormalizationProposals(**(row["proposals"] or {}))
+    proposals.epub_staged = True
+    proposals.epub_hash = hashlib.sha256(data).hexdigest()
+    await conn.execute(
+        "UPDATE queue_items SET proposals=$2, updated_at=now() WHERE queue_item_id=$1",
+        queue_item_id, proposals.model_dump(mode="json"),
+    )
+    await commit.maybe_commit(conn, queue_item_id)
+    return await _load(conn, queue_item_id)
 
 
 @router.post("/{queue_item_id}/uploaded", response_model=QueueItem)
