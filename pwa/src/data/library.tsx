@@ -11,6 +11,7 @@ import { loadSnapshotDb } from './snapshot'
 import { readWorks } from './mappers'
 import { deleteEdit, loadOverlay, reconcile, saveEdit, type Edit } from './overlay'
 import { enqueueWorkPatch, flushQueue, queueSize } from './queue'
+import { enqueueAo3SideEffects } from './ao3'
 import type { Work } from './types'
 
 type LibraryState = {
@@ -74,6 +75,8 @@ export function LibraryProvider({ children }: { children: ReactNode }) {
     await enqueueWorkPatch(workId, edit)
     const r = await flushQueue()
     setPending(r.remaining)
+    // Enqueue the AO3 side-effect(s) for the extension to drain (§12.2).
+    void enqueueAo3SideEffects(workId, edit)
     return null
   }
 
