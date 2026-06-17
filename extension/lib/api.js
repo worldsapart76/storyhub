@@ -14,15 +14,18 @@
     return { hubUrl: normHub(cfg.hubUrl), token: cfg.token }
   }
 
-  async function req(path, { method = 'GET', body, raw = false, auth } = {}) {
+  async function req(path, { method = 'GET', body, rawBody, contentType, raw = false, auth } = {}) {
     const { hubUrl, token } = auth || (await creds())
     const headers = { Authorization: `Bearer ${token}` }
-    if (body !== undefined) headers['Content-Type'] = 'application/json'
-    const res = await fetch(`${hubUrl}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    })
+    let payload
+    if (rawBody !== undefined) {
+      if (contentType) headers['Content-Type'] = contentType
+      payload = rawBody
+    } else if (body !== undefined) {
+      headers['Content-Type'] = 'application/json'
+      payload = JSON.stringify(body)
+    }
+    const res = await fetch(`${hubUrl}${path}`, { method, headers, body: payload })
     if (res.status === 401 || res.status === 403) throw new Error('AUTH')
     if (!res.ok) throw new Error(`${path} → ${res.status}`)
     if (raw) return res
@@ -52,6 +55,42 @@
     async getSnapshotFile() {
       const res = await req('/api/snapshot/file', { raw: true })
       return res.arrayBuffer()
+    },
+
+    /* --- capture (§12.1, amended) --- */
+
+    // POST raw metadata -> { queue_item, needs_review }. Creates the queue item;
+    // the epub follows via uploadEpub.
+    capture(payload) {
+      return req('/api/queue', { method: 'POST', body: payload })
+    },
+
+    // POST epub bytes the content script fetched from AO3 -> Railway stages to R2
+    // and commits. (AO3's Cloudflare blocks both the extension SW fetch and a
+    // Railway-side fetch, so only the page-context content-script fetch works.)
+    uploadEpub(queueItemId, bytes) {
+      return req(`/api/queue/${queueItemId}/epub`, {
+        method: 'POST',
+        rawBody: bytes,
+        contentType: 'application/epub+zip',
+      })
+    },
+
+    // Deliberate status/favorite write (§12.2). patch = {read_status?, is_favorite?,
+    // date_read?, pinned?}.
+    patchWork(workId, patch) {
+      return req(`/api/works/${workId}`, { method: 'PATCH', body: patch })
+    },
+
+    /* --- ao3_actions drain (§12.2) --- */
+
+    // Pending AO3 side-effects the app enqueued; the extension performs + acks them.
+    listPendingAo3Actions() {
+      return req('/api/ao3-actions?status=pending')
+    },
+    // result = 'done' | 'failed'.
+    ackAo3Action(id, result) {
+      return req(`/api/ao3-actions/${id}/ack?result=${result}`, { method: 'POST' })
     },
   }
 })()

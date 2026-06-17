@@ -1,0 +1,50 @@
+/* Work-page injected controls (E3a): the title status badge (sized up from the
+   listing pill), the DNF button in AO3's action row, and the capture toast.
+   Shares the .sh-badge pill + colors from badges.css. */
+
+.sh-workbadge { margin-left: 12px; }
+.sh-workbadge .sh-badge { font-size: 13px; padding: 3px 11px; }
+.sh-workbadge .sh-mark { font-size: 13px; }
+.sh-workbadge .sh-fav { font-size: 16px; }
+
+.sh-dnf-li { display: inline; list-style: none; }
+button.sh-dnf {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: #ef7d72;
+  border: 1px solid #c0392b;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 0.9em;
+  padding: 3px 11px;
+  cursor: pointer;
+}
+button.sh-dnf:hover:not(:disabled) { background: rgba(192, 57, 43, 0.15); }
+button.sh-dnf:disabled { opacity: 0.45; cursor: default; }
+button.sh-dnf .sh-mark { font-size: inherit; }
+
+.sh-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 99999;
+  max-width: 320px;
+  background: #181b22;
+  color: #e6e8ee;
+  border: 1px solid #2a2f3a;
+  border-left: 3px solid #8b8bf0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font: 13px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.sh-toast--show { opacity: 1; transform: translateY(0); }
+.sh-toast--ok { border-left-color: #7ee787; }
+.sh-toast--warn { border-left-color: #f59e0b; }
+.sh-toast--err { border-left-color: #ff7b72; }
