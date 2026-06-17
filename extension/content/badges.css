@@ -1,0 +1,45 @@
+/* StoryHub badges injected into AO3 listing pages. Mirrors the Phase-P design
+   (pwa ExtensionControls.css): .sh- prefix, indigo ◆ mark, pill status badge,
+   amber ★. Fixed colors — AO3 is an external page. Adds the listing-only N/A
+   state (outlined: in view but not in the library). */
+
+.sh-titlebadge.sh-listbadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  vertical-align: middle;
+  margin-left: 8px;
+}
+
+.sh-listbadge .sh-mark {
+  color: #8b8bf0;
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.sh-listbadge .sh-badge {
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.sh-listbadge .sh-badge--unread { background: #3b82f6; }
+.sh-listbadge .sh-badge--read { background: #6b7585; }
+.sh-listbadge .sh-badge--dnf { background: #9aa4b2; }
+.sh-listbadge .sh-badge--na {
+  background: transparent;
+  color: #9aa4b2;
+  border: 1px solid #6a6a72;
+  font-weight: 600;
+}
+
+.sh-listbadge .sh-fav {
+  color: #f59e0b;
+  font-size: 13px;
+  line-height: 1;
+}

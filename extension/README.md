@@ -39,7 +39,9 @@ mode (no store submission).
 
 - **E1 — scaffold + setup + snapshot cache: DONE.** Manifest, options/setup,
   background sync, badge-map projection.
-- E2 — badges on AO3 listings (content script). *next*
+- **E2 — badges on AO3 listings: DONE.** `content/badges.js` + `.css`: for every
+  work blurb (search / MfL / bookmarks / history / tag / series / author),
+  injects N/A (outlined) vs Unread/Read/DNF + ★, read from the cached badge map.
 - E3 — work-page capture + status hooks (Mark-for-Later, Mark-as-Read, DNF,
   bookmark intercept).
 - E4 — `ao3_actions` drain on page load. *(precursor: confirm the live DB's

@@ -17,6 +17,14 @@
   "action": {
     "default_title": "StoryHub"
   },
+  "content_scripts": [
+    {
+      "matches": ["https://archiveofourown.org/*"],
+      "js": ["lib/storage.js", "content/badges.js"],
+      "css": ["content/badges.css"],
+      "run_at": "document_idle"
+    }
+  ],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true
