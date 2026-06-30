@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import './ReadingLists.css'
-import { fmtWords } from '../mock/data'
+import { fmtWords, SORT_OPTIONS } from '../mock/data'
+import { comparator } from '../data/sort'
 import { StoryCard } from './StoryCard'
 import { Reader } from './Reader'
 import { Button } from './Button'
@@ -18,10 +19,11 @@ import type { Work } from '../data/types'
    - Covers are color blocks for now; R2 cover upload (200×200 crop) is deferred. */
 
 const FAVORITES_ID = 'favorites'
-type ListSort = 'manual' | 'added' | 'words' | 'title'
-const SORT_LABELS: Record<ListSort, string> = {
-  manual: 'Manual (position)', added: 'Added ↓', words: 'Words ↓', title: 'Title',
-}
+/* 'manual' = the list's own member order (ordinary lists only). Everything else is a
+   SORT_OPTIONS label, sorted by the shared Browse comparator so lists and Browse offer
+   the same sort parameters. */
+const MANUAL: { value: string; short: string } = { value: 'manual', short: 'Manual' }
+const SORT_CHOICES = SORT_OPTIONS.map((o) => ({ value: o.label, short: o.short }))
 
 function favoritesList(memberIds: number[]): ReadingListRow {
   return { id: FAVORITES_ID, name: 'Favorites', description: 'Everything you’ve favorited', color: '#caa24a', autoPin: false, isSystem: true, starred: true, memberIds }
@@ -211,8 +213,9 @@ function ListDetail({ list, worksById, onBack, onReplace, onDeleted, onUnfavorit
   persist: (workId: number, edit: Parameters<ReturnType<typeof useLibrary>['update']>[1]) => void
 }) {
   const system = list.isSystem
-  const sortOptions: ListSort[] = system ? ['added', 'words', 'title'] : ['manual', 'added', 'words', 'title']
-  const [sort, setSort] = useState<ListSort>(sortOptions[0])
+  // Favorites (system) has no manual order; ordinary lists lead with Manual (position).
+  const sortChoices = system ? SORT_CHOICES : [MANUAL, ...SORT_CHOICES]
+  const [sort, setSort] = useState<string>(sortChoices[0].value)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [dragId, setDragId] = useState<number | null>(null)
   const [overId, setOverId] = useState<number | null>(null)
@@ -228,11 +231,7 @@ function ListDetail({ list, worksById, onBack, onReplace, onDeleted, onUnfavorit
   const members = useMemo(() => {
     const ws = list.memberIds.map((id) => worksById.get(id)).filter(Boolean) as Work[]
     if (sort === 'manual') return ws
-    const arr = [...ws]
-    if (sort === 'added') arr.reverse()
-    if (sort === 'words') arr.sort((a, b) => b.wordcount - a.wordcount)
-    if (sort === 'title') arr.sort((a, b) => a.title.localeCompare(b.title))
-    return arr
+    return [...ws].sort(comparator(sort))
   }, [list.memberIds, worksById, sort])
 
   const toggleSel = (id: number) =>
@@ -310,8 +309,8 @@ function ListDetail({ list, worksById, onBack, onReplace, onDeleted, onUnfavorit
           <div className="rl__detctrls">
             <label className="rl__sortwrap">
               Sort
-              <select className="rl__sort" value={sort} onChange={(e) => setSort(e.target.value as ListSort)}>
-                {sortOptions.map((s) => (<option key={s} value={s}>{SORT_LABELS[s]}</option>))}
+              <select className="rl__sort" value={sort} onChange={(e) => setSort(e.target.value)}>
+                {sortChoices.map((s) => (<option key={s.value} value={s.value}>{s.short}</option>))}
               </select>
             </label>
             {!system && <Button variant="ghost" size="sm" onClick={() => { if (confirm(`Delete “${list.name}”?`)) deleteReadingList(list.id).then(onDeleted).catch(reportErr) }}>Delete</Button>}

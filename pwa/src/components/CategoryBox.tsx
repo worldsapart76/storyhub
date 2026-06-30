@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './CategoryBox.css'
 import { FilterChip, nextChipState, type ChipState } from './FilterChip'
 import type { TagOption } from '../mock/data'
@@ -21,6 +21,7 @@ export function CategoryBox({
   defaultOpen = true,
   value,
   onChange,
+  onFavoriteTag,
 }: {
   category: string
   tags: TagOption[]
@@ -35,14 +36,23 @@ export function CategoryBox({
      (display concerns). Omit both to run uncontrolled — the gallery does. */
   value?: CatFilter
   onChange?: (next: CatFilter) => void
+  /* Persist a tag's favorite state (Tag Management state=favorite). Omit in the
+     uncontrolled gallery, where favoriting stays local. */
+  onFavoriteTag?: (category: string, name: string, fav: boolean) => void
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const [localMode, setLocalMode] = useState<'OR' | 'AND'>('OR')
   const [query, setQuery] = useState('')
   const [localStates, setLocalStates] = useState<Record<string, ChipState>>({})
-  const [favorites, setFavorites] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(tags.filter((t) => t.favorite).map((t) => [t.name, true])),
-  )
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({})
+  // Favorites come from the server (favTags → each tag's `favorite` prop), which can
+  // arrive AFTER this box mounts (favTags is fetched async) or change when toggled
+  // here or in Tag Management. Sync from props so the box reflects it — a mount-only
+  // initializer captured an empty set and never updated. A local toggle updates both
+  // this and the parent's favTags, which flows back through props, keeping them in sync.
+  useEffect(() => {
+    setFavorites(Object.fromEntries(tags.filter((t) => t.favorite).map((t) => [t.name, true])))
+  }, [tags])
   const [session, setSession] = useState<string[]>([]) // session-added tag names
 
   const controlled = !!onChange
@@ -91,7 +101,11 @@ export function CategoryBox({
 
   const cycle = (name: string) =>
     setStatesBoth((p) => ({ ...p, [name]: nextChipState(p[name] ?? 'default') }))
-  const toggleFavorite = (name: string) => setFavorites((p) => ({ ...p, [name]: !p[name] }))
+  const toggleFavorite = (name: string) => {
+    const next = !favorites[name]
+    setFavorites((p) => ({ ...p, [name]: next })) // immediate visual; parent persists to the hub
+    onFavoriteTag?.(category, name, next)
+  }
   const addSession = (name: string) => {
     // Searching + picking a tag means you want it ON — auto-include it (it stays
     // in the box if later unselected, until manually removed via × or a refresh).

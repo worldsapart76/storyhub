@@ -77,6 +77,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         case 'syncNow':
           sendResponse(await syncIfConfigured(true))
           break
+        case 'sync':
+          // Non-forced: only downloads if the snapshot version bumped. Content
+          // scripts fire this on AO3 page load so the injected badge reflects the
+          // latest committed library state (e.g. a status change applied in the PWA)
+          // instead of waiting for the hourly sync alarm.
+          sendResponse(await syncIfConfigured(false))
+          break
         case 'scheduleRebuild':
           scheduleRebuild()
           sendResponse({ ok: true })

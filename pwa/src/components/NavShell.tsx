@@ -9,17 +9,26 @@ import { NAV_ITEMS } from '../mock/data'
 /* Controlled when `active`/`onNavigate` are passed (the wired App routes), else
    self-manages (the design gallery). A theme toggle renders only when `theme`/
    `onToggleTheme` are supplied (the real app) — the gallery has its own. */
-export function NavShell({ children, active: activeProp, onNavigate, theme, onToggleTheme, pending = 0 }: {
+export function NavShell({ children, active: activeProp, onNavigate, theme, onToggleTheme, reviewCount, pendingCount }: {
   children?: ReactNode
   active?: string
   onNavigate?: (id: string) => void
   theme?: 'light' | 'dark'
   onToggleTheme?: () => void
-  pending?: number
+  reviewCount?: number
+  pendingCount?: number
 }) {
   const [internal, setInternal] = useState<string>('browse')
   const active = activeProp ?? internal
   const navigate = onNavigate ?? setInternal
+
+  /* Real app passes live reviewCount/pendingCount (hide at 0); the gallery passes
+     nothing and falls back to each item's static mock badge. */
+  const badgeFor = (item: { id: string; badge?: number }) => {
+    if (item.id === 'review' && reviewCount !== undefined) return reviewCount
+    if (item.id === 'pending' && pendingCount !== undefined) return pendingCount
+    return item.badge
+  }
 
   return (
     <div className="shell">
@@ -34,15 +43,10 @@ export function NavShell({ children, active: activeProp, onNavigate, theme, onTo
             >
               <span className="shell__icon" aria-hidden>{item.icon}</span>
               <span className="shell__label">{item.label}</span>
-              {'badge' in item && item.badge ? <span className="shell__badge">{item.badge}</span> : null}
+              {badgeFor(item) ? <span className="shell__badge">{badgeFor(item)}</span> : null}
             </button>
           ))}
         </div>
-        {pending > 0 && (
-          <div className="shell__pending" title={`${pending} change${pending === 1 ? '' : 's'} waiting to sync`}>
-            <span aria-hidden>⟳</span> {pending} unsynced
-          </div>
-        )}
         {onToggleTheme && (
           <button className="shell__theme" onClick={onToggleTheme}
             aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}

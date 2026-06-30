@@ -70,145 +70,131 @@
   }
 
   // ---- actions ----
-  // Capture, all in the content script (page context): create the queue item,
-  // fetch the epub from AO3 (only the page context passes AO3's Cloudflare; a DNR
-  // rule injects the CORS header so we can read it), POST the bytes to Railway,
-  // which stages + commits.
+  // Capture the LIVE work into the unified queue via the shared capture path
+  // (lib/capture.js) — same scrape → held capture → page-context epub fetch → upload
+  // used by the Marked-for-Later bulk import. NOTHING commits here; it commits later
+  // from the PWA Pending page (after the Review Queue picks primaries if ambiguous).
   async function doCapture() {
+    toast('Queueing…')
+    try {
+      const r = await SH.capture.captureFromDoc(document, workId, { onProgress: (m) => toast(m) })
+      if (r.skipped) { toast('WIP — not added (only complete works are added)', 'warn'); return { ok: false, skipped: 'incomplete' } }
+      if (!r.ok) { toast('Capture failed: ' + r.reason, 'err'); return { ok: false } }
+      toast('Queued: Add', 'ok')
+      if (globalThis.SH.drawer) globalThis.SH.drawer.refresh()
+      return { ok: true }
+    } catch (e) {
+      console.warn('[StoryHub] capture queue failed:', e.message)
+      toast('Queue failed: ' + e.message, 'err')
+      return { ok: false }
+    }
+  }
+
+  // ---- queue actions (pending-queue redesign) -----------------------------
+  // Every AO3 action becomes a pending item; NOTHING is performed on AO3 or written
+  // to the library here. The AO3 side applies later from the drawer, the library
+  // side from the PWA Pending page. No instant badge / button change, just a toast.
+  const QUEUE_LABEL = {
+    capture: 'Add', mark_read: 'Mark Read', mark_unread: 'Mark for Later',
+    mark_dnf: 'Mark DNF', favorite: 'Favorite', unfavorite: 'Un-favorite',
+  }
+  async function queueAction(action) {
+    let title = null
+    let author = null
     const scraped = SH.ao3.scrapeWork()
-    if (!scraped) {
-      toast("Couldn't read this page — please report", 'err')
-      return { ok: false }
-    }
-    const { payload } = scraped
-    if (payload.is_complete === false) {
-      toast('WIP — not added (only complete works are added)', 'warn')
-      return { ok: false, skipped: 'incomplete' }
-    }
-    if (!payload.epub_url) {
-      toast('No EPUB download link found', 'err')
-      return { ok: false }
-    }
-    toast('Capturing…')
-    try {
-      const created = await SH.api.capture(payload)
-      const qid = created.queue_item.queue_item_id
-      // Hit the download subdomain directly (skip the main-domain 301);
-      // credentials:'include' sends AO3/Cloudflare cookies.
-      const dlUrl = payload.epub_url.replace(
-        /^https:\/\/archiveofourown\.org\//,
-        'https://download.archiveofourown.org/'
-      )
-      const epubRes = await fetch(dlUrl, { credentials: 'include' })
-      if (!epubRes.ok) {
-        toast(`Epub fetch → ${epubRes.status}`, 'err')
-        return { ok: false }
-      }
-      const bytes = await epubRes.arrayBuffer()
-      const item = await SH.api.uploadEpub(qid, bytes)
-      if (item.state === 'failed') {
-        toast('Commit failed: ' + (item.error || '?'), 'err')
-        return { ok: false }
-      }
-      await setEntry({ s: 'Unread', f: 0, a: 'live' }) // fresh import = Unread
-      renderTitleBadge(await getEntry())
-      toast(created.needs_review ? 'Captured — needs review in StoryHub' : 'Added to StoryHub', 'ok')
-      return { ok: true, needsReview: created.needs_review }
-    } catch (e) {
-      console.warn('[StoryHub] capture failed:', e.message)
-      toast('Capture failed: ' + e.message, 'err')
-      return { ok: false }
-    }
-  }
-
-  async function markRead() {
-    if (!(await getEntry())) {
-      const cap = await doCapture() // pre-existing MfL work not yet in StoryHub
-      if (!cap.ok || cap.needsReview) return
+    if (scraped && scraped.payload) {
+      title = scraped.payload.title || null
+      author = (scraped.payload.authors && scraped.payload.authors[0]) || null
     }
     try {
-      await SH.api.patchWork(workId, { read_status: 'Read', date_read: new Date().toISOString() })
-      await setEntry({ s: 'Read' })
-      renderTitleBadge(await getEntry())
-      toast('Marked Read', 'ok')
+      await SH.api.createPending({ work_id: workId, action, origin: 'ao3', title, author })
+      toast(`Queued: ${QUEUE_LABEL[action]}`, 'ok')
+      if (globalThis.SH.drawer) globalThis.SH.drawer.refresh()
     } catch (e) {
-      toast('Update failed: ' + e.message, 'err')
+      toast(`Queue failed: ${e.message}`, 'err')
     }
   }
 
-  async function markUnread() {
-    // Already in library + native Mark-for-Later clicked = deliberate re-mark (§12.2).
-    try {
-      await SH.api.patchWork(workId, { read_status: 'Unread' })
-      await setEntry({ s: 'Unread' })
-      renderTitleBadge(await getEntry())
-      toast('Marked for Later', 'ok')
-    } catch (e) {
-      toast('Update failed: ' + e.message, 'err')
-    }
+  // Mark for Later: re-mark an in-library work Unread, else capture a new one.
+  // (Capture still uses the old commit flow in this chunk; it moves into the queue
+  // next chunk — epub staging + Review Queue.)
+  async function onMarkForLater() {
+    log('mark_for_later intercepted')
+    if (await getEntry()) await queueAction('mark_unread')
+    else await doCapture()
+  }
+  async function onMarkAsRead() {
+    log('mark_as_read intercepted')
+    await queueAction('mark_read')
   }
 
-  // Mirror AO3's own Mark-for-Later <-> Mark-as-Read toggle on the button_to form.
-  function toggleMarkForm(form, toRead) {
-    if (!form) return
-    const btn = form.querySelector('button[type="submit"], button')
-    if (btn) btn.textContent = toRead ? 'Mark as Read' : 'Mark for Later'
-    form.setAttribute('action', `/works/${workId}/${toRead ? 'mark_as_read' : 'mark_for_later'}`)
-  }
+  // AO3's actual bookmark state (DOM-seeded at init) routes the Bookmark button
+  // between queueing a favorite vs an un-favorite.
+  let hasAo3Bookmark = false
 
-  async function onMarkForLater(form) {
-    if (await getEntry()) await markUnread() // re-mark a library work (deliberate Unread)
-    else if (!(await doCapture()).ok) return // capture a new work
-    SH.ao3.markForLater(workId).catch(() => {}) // AO3 side-effect (we prevented the native nav)
-    toggleMarkForm(form, true)
+  async function onCreateFavorite() {
+    await queueAction('favorite')
   }
-
-  async function onMarkAsRead(form) {
-    await markRead()
-    SH.ao3.markAsRead(workId).catch(() => {})
-    toggleMarkForm(form, false)
+  async function onUnfavorite() {
+    // Un-favorite removes the AO3 bookmark when applied — guard it (hard rule).
+    if (!window.confirm('Queue un-favoriting this work? Removes its private AO3 bookmark when applied.')) return
+    await queueAction('unfavorite')
   }
-
   async function onDnf() {
-    if (!(await getEntry())) {
-      const cap = await doCapture()
-      if (!cap.ok) return
-      if (cap.needsReview) {
-        toast('Captured — set DNF after review', 'warn')
-        return
-      }
-    }
-    try {
-      await SH.api.patchWork(workId, { read_status: 'DNF' })
-    } catch (e) {
-      toast('DNF failed: ' + e.message, 'err')
-      return
-    }
-    await setEntry({ s: 'DNF' })
-    renderTitleBadge(await getEntry())
-    const btn = document.querySelector('.sh-dnf')
-    if (btn) btn.disabled = true
-    // AO3 end-state: marked read (best-effort; StoryHub DNF is authoritative).
-    SH.ao3.markAsRead(workId).catch(() => {})
-    toast('DNF', 'ok')
+    await queueAction('mark_dnf')
   }
 
-  // AO3 renders Mark-for-Later / Mark-as-Read as button_to <form>s. Intercept the
-  // form SUBMIT in the capture phase + stopImmediatePropagation so the native POST
-  // never navigates (which would abort our async capture); we perform the AO3
-  // side-effect ourselves via same-origin PATCH.
+  // AO3 renders Mark-for-Later as a button_to <form> but Mark-as-Read as a
+  // rails-ujs <a data-method="patch">, so intercept BOTH: the form SUBMIT and an
+  // anchor CLICK, each in the capture phase + stopImmediatePropagation so neither
+  // the native POST nor rails-ujs navigates/AJAXes (which would abort our async
+  // capture). We perform the AO3 side-effect ourselves. The two never double-fire:
+  // a form's submit button is a <button> (not an <a>), so the anchor handler skips
+  // it; an anchor fires only click, no submit.
+  const MARK_RE = /\/works\/(\d+)\/(mark_for_later|mark_as_read)/
+  function dispatchMark(m, control) {
+    if (m[2] === 'mark_for_later') onMarkForLater(control)
+    else onMarkAsRead(control)
+  }
   document.addEventListener(
     'submit',
     (e) => {
       const form = e.target
       if (!(form instanceof HTMLFormElement)) return
-      const action = form.getAttribute('action') || form.action || ''
-      const m = action.match(/\/works\/(\d+)\/(mark_for_later|mark_as_read)/)
+      const m = (form.getAttribute('action') || form.action || '').match(MARK_RE)
       if (!m || Number(m[1]) !== workId) return
       e.preventDefault()
       e.stopImmediatePropagation()
-      if (m[2] === 'mark_for_later') onMarkForLater(form)
-      else onMarkAsRead(form)
+      dispatchMark(m, form)
+    },
+    true
+  )
+  document.addEventListener(
+    'click',
+    (e) => {
+      const a = e.target.closest && e.target.closest('a[href]')
+      if (!a) return
+      const m = (a.getAttribute('href') || '').match(MARK_RE)
+      if (!m || Number(m[1]) !== workId) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      dispatchMark(m, a)
+    },
+    true
+  )
+
+  // AO3's Bookmark / Edit Bookmark button (a.bookmark_form_placement_open) reveals
+  // an inline form; intercept it. If AO3 already has a bookmark -> remove (guarded
+  // un-favorite); else -> create an always-private bookmark (= Favorite).
+  document.addEventListener(
+    'click',
+    (e) => {
+      const a = e.target.closest && e.target.closest('a.bookmark_form_placement_open')
+      if (!a) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (hasAo3Bookmark) onUnfavorite()
+      else onCreateFavorite()
     },
     true
   )
@@ -226,7 +212,18 @@
     const entry = await getEntry()
     renderTitleBadge(entry)
     injectDnf(entry)
-    log('work.js ready · work', workId, '·', entry || 'not in library')
+    // Refresh the badge from the latest committed snapshot. Cheap when nothing
+    // changed (sync only downloads if the version bumped); when a status/favorite
+    // was applied in the PWA it lands here on the next AO3 visit. The resulting
+    // setBadgeMap fires storage.onChanged above, which re-renders the badge.
+    chrome.runtime.sendMessage({ type: 'sync' }).catch(() => {})
+    // Cache the AO3 pseud id from the inline bookmark form so the drawer can
+    // apply a queued favorite (bookmark) from any page.
+    const pseudEl = document.querySelector('#bookmark_pseud_id')
+    if (pseudEl && pseudEl.value) SH.storage.setPseudId(pseudEl.value)
+    // Seed bookmark state from AO3's actual DOM (button reflects AO3, not StoryHub).
+    hasAo3Bookmark = !!SH.ao3.bookmarkIdFromDom()
+    log('work.js ready · work', workId, '·', entry || 'not in library', '· bookmarked:', hasAo3Bookmark)
   }
 
   init()

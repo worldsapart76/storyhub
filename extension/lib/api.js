@@ -82,15 +82,52 @@
       return req(`/api/works/${workId}`, { method: 'PATCH', body: patch })
     },
 
-    /* --- ao3_actions drain (§12.2) --- */
+    /* --- unified pending-changes queue (pending-queue redesign, supersedes the
+       §12.2 ao3_actions drain). Every AO3 action becomes a pending item; the drawer
+       applies the AO3 side and acks it. Nothing is performed on click. --- */
 
-    // Pending AO3 side-effects the app enqueued; the extension performs + acks them.
-    listPendingAo3Actions() {
-      return req('/api/ao3-actions?status=pending')
+    // Create a queue item (origin 'ao3'). body = {work_id, action, origin, title?, author?}.
+    createPending(body) {
+      return req('/api/pending', { method: 'POST', body })
     },
-    // result = 'done' | 'failed'.
-    ackAo3Action(id, result) {
-      return req(`/api/ao3-actions/${id}/ack?result=${result}`, { method: 'POST' })
+    // Open items; side='ao3' narrows to what the drawer must apply.
+    listPending(side) {
+      return req(`/api/pending${side ? `?side=${side}` : ''}`)
+    },
+    cancelPending(id) {
+      return req(`/api/pending/${id}`, { method: 'DELETE', raw: true })
+    },
+    // Captures awaiting a PC epub fetch: PWA paste-a-URL / share stubs + any capture
+    // whose epub fetch failed (staging_key IS NULL). The drawer runs the content-
+    // script capture on each work_id, which supersedes the row with the completed
+    // (metadata + epub) capture.
+    fetchQueue() {
+      return req('/api/pending/fetch-queue')
+    },
+    // Queue a NEW work for capture (held, not committed) + upload its epub bytes.
+    capturePending(payload) {
+      return req('/api/pending/capture', { method: 'POST', body: payload })
+    },
+    uploadPendingEpub(id, bytes) {
+      return req(`/api/pending/${id}/epub`, {
+        method: 'POST',
+        rawBody: bytes,
+        contentType: 'application/epub+zip',
+      })
+    },
+    // Mark an item's AO3 side after performing it. result = 'done' | 'pending'.
+    ackAo3(id, result, error) {
+      const q = `?result=${result}` + (error ? `&error=${encodeURIComponent(error)}` : '')
+      return req(`/api/pending/${id}/ack-ao3${q}`, { method: 'POST' })
+    },
+
+    // Backfill is_favorite from the AO3 bookmark set (the bookmarks were never
+    // reconciled at migration — favorites came from Calibre only). Sets is_favorite +
+    // forces Read for each supplied work in the library; returns
+    // {favorited, already, newly_read, not_in_library, snapshot_version?}. Rebuilds
+    // the snapshot server-side, so no separate rebuild call is needed.
+    reconcileFavorites(workIds) {
+      return req('/api/works/reconcile-favorites', { method: 'POST', body: { work_ids: workIds } })
     },
 
     // Rebuild the snapshot from current Postgres state (+ version bump). Debounced

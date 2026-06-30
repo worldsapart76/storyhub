@@ -42,6 +42,19 @@
   padding: 7px var(--space-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   background: var(--bg-elevated); color: var(--text); font-size: var(--text-sm);
 }
+/* Fandom filter (searchable, with a clear ×). Anchors the SearchMenu popover. */
+.tm__fandomwrap { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+.tm__fandombtn { cursor: pointer; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm__fandombtn.is-on { background: var(--accent-quiet); color: var(--accent); border-color: var(--accent); }
+.tm__fandomclear {
+  border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-secondary);
+  border-radius: var(--radius-sm); width: 24px; height: 28px; line-height: 1; cursor: pointer;
+}
+.tm__fandomclear:hover { color: var(--danger); border-color: var(--danger); }
+
+.tm__keptonly { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-sm); color: var(--text-secondary); white-space: nowrap; cursor: pointer; }
+.tm__keptonly input { accent-color: var(--accent); }
+
 .tm__quick { display: inline-flex; gap: 6px; }
 .tm__chip {
   border: 1px solid var(--border-strong); background: var(--bg-elevated); color: var(--text-secondary);
@@ -49,7 +62,14 @@
 }
 .tm__chip.is-on { background: var(--accent-quiet); color: var(--accent); border-color: var(--accent); }
 
-.tm__count { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); }
+.tm__count { font-size: var(--text-xs); color: var(--text-muted); margin-bottom: var(--space-2); display: flex; align-items: center; gap: var(--space-3); }
+.tm__clearfilters {
+  font: inherit; font-size: var(--text-xs);
+  color: var(--accent); background: transparent;
+  border: 1px solid var(--accent); border-radius: var(--radius-pill);
+  padding: 1px var(--space-2); cursor: pointer;
+}
+.tm__clearfilters:hover { background: var(--accent-quiet); }
 
 /* ---- Bulk bar ---- */
 .tm__bulk {
@@ -97,7 +117,7 @@
 .tm__vrow { box-sizing: border-box; }
 .tm__thead, .tm__row {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1.6fr) minmax(0, 1fr) 64px minmax(0, 0.95fr) 56px 72px minmax(0, 1.15fr) minmax(0, 1.4fr) 56px;
+  grid-template-columns: 32px minmax(0, 2.4fr) minmax(0, 0.9fr) 92px minmax(0, 0.85fr) 56px 72px minmax(0, 1fr) minmax(0, 1.1fr) 56px;
   align-items: center; gap: var(--space-2);
   padding: 8px var(--space-3);
 }
@@ -114,14 +134,18 @@
 }
 .tm__sortbtn:hover { color: var(--text); }
 .tm__col-uses.tm__sortbtn { justify-content: flex-end; }
-.tm__row { border-top: 1px solid var(--border); font-size: var(--text-sm); }
+/* Top-align cells so a wrapped (multi-line) tag name reads cleanly against the
+   single-line controls instead of floating in the vertical center. */
+.tm__row { border-top: 1px solid var(--border); font-size: var(--text-sm); align-items: start; }
 .tm__row.is-selected { background: var(--accent-quiet); }
 .tm__td, .tm__th { min-width: 0; }
 .tm__col-check input { accent-color: var(--accent); }
 .tm__col-uses { text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
 
 .tm__col-name { display: flex; align-items: center; gap: var(--space-2); }
-.tm__tagname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Full tag name always readable: wrap instead of truncating (names run up to ~150
+   chars). The wider name column above keeps typical tags on one line. */
+.tm__tagname { min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .tm__inbrowse {
   flex: none; border: none; background: transparent; color: var(--text-muted);
   font-size: var(--text-sm); line-height: 1; padding: 0 4px; border-radius: var(--radius-sm); opacity: 0.4;
@@ -138,6 +162,13 @@
 .tm__kind--character { background: #e7f6ee; color: #1f8a52; }
 .tm__kind--freeform { background: var(--bg-sunken); color: var(--text-secondary); }
 .tm__kind--warning { background: #fdede7; color: #c2542a; }
+
+/* Editable kind cell: keep the per-kind colour cue from the old badge. */
+.tm__kindselect { width: 100%; font-weight: var(--weight-medium); }
+.tm__kindselect--fandom { color: #2b59c3; border-color: #b9cdf3; }
+.tm__kindselect--relationship { color: #c0367f; border-color: #f0c0d7; }
+.tm__kindselect--character { color: #1f8a52; border-color: #b6e0c8; }
+.tm__kindselect--warning { color: #c2542a; border-color: #f3c9b6; }
 
 .tm__na { color: var(--text-muted); }
 .tm__synro { color: var(--text-secondary); font-size: var(--text-sm); }
@@ -214,9 +245,10 @@
 .tm__catedit:disabled { opacity: 0.3; }
 .tm__catedit:not(:disabled):hover { background: var(--bg-hover); color: var(--text); }
 
-/* Name + display-alias (separate columns) */
+/* Name + display-alias (separate columns). Tag name WRAPS (full name always
+   readable — names run up to ~150 chars); this is the effective wide-table rule. */
 .tm__col-name { min-width: 0; }
-.tm__tagname { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm__tagname { display: block; min-width: 0; white-space: normal; overflow-wrap: break-word; }
 .tm__col-alias { min-width: 0; }
 .tm__aliasinput {
   width: 100%; padding: 4px var(--space-2);

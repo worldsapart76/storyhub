@@ -1,5 +1,5 @@
 # StoryHub worker — Python 3.12, Windows only (CLAUDE.md hard rule).
-httpx==0.28.1      # Railway + Calibre Content Server REST client (digest auth)
+httpx==0.28.1      # Railway hub REST client (heartbeat + pc_jobs)
 pystray==0.19.5    # Windows system-tray icon + menu
 Pillow==11.1.0     # tray icon image (generated at runtime, no shipped asset)
-boto3==1.43.29     # Cloudflare R2 (S3-compatible) epub staging + library upload
+boto3==1.43.29     # Cloudflare R2 (S3-compatible) — read snapshot + epubs for transfer

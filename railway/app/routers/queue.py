@@ -12,7 +12,7 @@ import hashlib
 from uuid import UUID
 
 import asyncpg
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 
 from .. import commit, r2
 from ..db import get_conn
@@ -215,3 +215,18 @@ async def get_queue_item(
     queue_item_id: UUID, conn: asyncpg.Connection = Depends(get_conn)
 ) -> QueueItem:
     return await _load(conn, queue_item_id)
+
+
+@router.delete("/{queue_item_id}")
+async def delete_queue_item(
+    queue_item_id: UUID, conn: asyncpg.Connection = Depends(get_conn)
+) -> Response:
+    """Dismiss a pipeline item (Sync view's import-pipeline panel). Only removes the
+    queue row — `works` has no FK to queue_items, so a committed work is unaffected;
+    this just clears stuck/failed/duplicate captures the user wants gone."""
+    deleted = await conn.execute(
+        "DELETE FROM queue_items WHERE queue_item_id = $1", queue_item_id
+    )
+    if deleted.endswith(" 0"):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Queue item not found")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

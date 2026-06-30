@@ -1,17 +1,20 @@
 /* LibraryProvider — loads the snapshot once and exposes works + the sql.js DB
    handle (for relational queries: Tag Management, etc.) via useLibrary().
 
-   Writes: update() does an optimistic in-memory change, persists it to the local
-   overlay (so it survives refresh before the snapshot rebuilds), and PATCHes
-   Railway. On failure it rolls everything back and surfaces the error. */
+   Writes (pending-queue redesign): status/favorite changes are NOT applied
+   optimistically — `update()` creates a pending-queue item (reviewed + committed
+   later on the Pending page), so Browse always shows committed snapshot state and
+   the old overlay/divergence is gone. `pinned` is the exception: it's library-only
+   offline caching with no AO3 side, so it's written directly + reflected at once. */
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Database } from 'sql.js'
 import { loadSnapshotDb } from './snapshot'
 import { readWorks } from './mappers'
-import { deleteEdit, loadOverlay, reconcile, saveEdit, type Edit } from './overlay'
-import { enqueueWorkPatch, flushQueue, queueSize } from './queue'
-import { enqueueAo3SideEffects } from './ao3'
+import { patchWork } from './api'
+import { ACTION_LABEL, actionForEdit, createPending } from './pending'
+import { toast } from './toast'
+import { type Edit } from './overlay'
 import type { Work } from './types'
 
 type LibraryState = {
@@ -21,66 +24,69 @@ type LibraryState = {
   loading: boolean
   error: string | null
   reload: () => void
-  /** Optimistic status/favorite/pin write — applied locally, queued, and synced
-      to Railway (queued offline, flushed on reconnect). Resolves null on success. */
+  /** Queue a status/favorite change (review + Apply on the Pending page) or write a
+      pin directly. Resolves an error string on failure, else null. */
   update: (workId: number, edit: Edit) => Promise<string | null>
-  /** Number of writes made locally that haven't synced to the hub yet. */
-  pending: number
+  /** Optimistically merge fields into a work already in state (the caller has
+      already persisted the change server-side) — e.g. a primary-ship/collection edit
+      that won't reach the snapshot until a rebuild. */
+  patchLocal: (workId: number, partial: Partial<Work>) => void
 }
 
 const Ctx = createContext<LibraryState | null>(null)
 
 export function LibraryProvider({ children }: { children: ReactNode }) {
-  const [s, setS] = useState<Omit<LibraryState, 'reload' | 'update' | 'pending'>>({
+  const [s, setS] = useState<Omit<LibraryState, 'reload' | 'update' | 'patchLocal'>>({
     works: [], db: null, version: 0, loading: true, error: null,
   })
-  const [pending, setPending] = useState(0)
-  const overlayRef = useRef<Map<number, Edit>>(new Map())
+  const worksRef = useRef<Work[]>([])
+  worksRef.current = s.works
 
   const load = () => {
     setS((p) => ({ ...p, loading: true, error: null }))
-    Promise.all([loadSnapshotDb(), loadOverlay()])
-      .then(({ 0: { db, version }, 1: overlay }) => {
-        // A snapshot that already reflects an edit means the server has it → prune
-        // that overlay entry. Still-pending offline edits sit on an OLDER snapshot,
-        // so they won't match and are kept (and the queue still syncs them).
-        const { works, stale } = reconcile(readWorks(db), overlay)
-        stale.forEach((id) => { overlay.delete(id); void deleteEdit(id) })
-        overlayRef.current = overlay
-        setS({ works, db, version, loading: false, error: null })
-      })
+    loadSnapshotDb()
+      .then(({ db, version }) => setS({ works: readWorks(db), db, version, loading: false, error: null }))
       .catch((e) =>
         setS((p) => ({ ...p, loading: false, error: e instanceof Error ? e.message : String(e) })))
   }
 
-  const flush = () => flushQueue().then((r) => setPending(r.remaining)).catch(() => {})
-
-  useEffect(() => {
-    load()
-    queueSize().then(setPending).catch(() => {})
-    if (navigator.onLine) flush()
-    window.addEventListener('online', flush)
-    return () => window.removeEventListener('online', flush)
-  }, [])
+  useEffect(load, [])
 
   const update = async (workId: number, edit: Edit): Promise<string | null> => {
-    // Unread is allowed as a DELIBERATE app correction (re-marks for later on AO3
-    // in Phase E). The "never clobber to Unread" protection lives on import, not here.
-    // Optimistic: patch in memory + overlay (the display layer)…
-    setS((p) => ({ ...p, works: p.works.map((w) => (w.workId === workId ? { ...w, ...edit } : w)) }))
-    const merged = { ...overlayRef.current.get(workId), ...edit }
-    overlayRef.current.set(workId, merged)
-    await saveEdit(workId, merged)
-    // …then queue the server write and try to flush now (no-op/queued if offline).
-    await enqueueWorkPatch(workId, edit)
-    const r = await flushQueue()
-    setPending(r.remaining)
-    // Enqueue the AO3 side-effect(s) for the extension to drain (§12.2).
-    void enqueueAo3SideEffects(workId, edit)
-    return null
+    const work = worksRef.current.find((w) => w.workId === workId)
+    const titleNote = work ? ` — ${work.title}` : ''
+
+    // Pin: library-only offline caching, no AO3 side, no divergence — write directly
+    // and reflect immediately.
+    if (edit.pinned !== undefined) {
+      setS((p) => ({ ...p, works: p.works.map((w) => (w.workId === workId ? { ...w, pinned: edit.pinned! } : w)) }))
+      const r = await patchWork(workId, { pinned: edit.pinned })
+      if (!r.ok) {
+        setS((p) => ({ ...p, works: p.works.map((w) => (w.workId === workId ? { ...w, pinned: !edit.pinned } : w)) }))
+        toast(`Pin failed: ${r.error}`, 'err')
+        return r.error
+      }
+      return null
+    }
+
+    // Status / favorite: queue it; nothing changes until "Apply to Library".
+    const action = actionForEdit(edit)
+    if (!action) return null
+    try {
+      await createPending(workId, action, { title: work?.title, author: work?.authors?.[0] })
+      toast(`Queued: ${ACTION_LABEL[action]}${titleNote}`)
+      return null
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e)
+      toast(`Queue failed: ${m}`, 'err')
+      return m
+    }
   }
 
-  return <Ctx.Provider value={{ ...s, reload: load, update, pending }}>{children}</Ctx.Provider>
+  const patchLocal = (workId: number, partial: Partial<Work>) =>
+    setS((p) => ({ ...p, works: p.works.map((w) => (w.workId === workId ? { ...w, ...partial } : w)) }))
+
+  return <Ctx.Provider value={{ ...s, reload: load, update, patchLocal }}>{children}</Ctx.Provider>
 }
 
 export function useLibrary(): LibraryState {

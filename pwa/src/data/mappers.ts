@@ -8,7 +8,7 @@ const COLUMNS =
   'work_id, title, authors, primary_ship, primary_collection, wordcount, ' +
   'chapter_count, is_complete, rating, read_status, is_favorite, pinned, ' +
   'availability, source, source_url, language, date_added, date_read, ' +
-  'summary_html, tags'
+  'summary_html, tags, series_name, series_index, personal_notes'
 
 function parseJson<T>(v: unknown, fallback: T): T {
   try {
@@ -61,6 +61,9 @@ function toWork(r: unknown[]): Work {
     dateReadTs: tsOf(r[17]),
     summary: stripHtml(r[18]),
     tags: parseJson<Tag[]>(r[19], []),
+    seriesName: (r[20] as string) ?? null,
+    seriesIndex: r[21] == null ? null : Number(r[21]),
+    personalNotes: (r[22] as string) ?? null,
   }
 }
 

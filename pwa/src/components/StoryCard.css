@@ -24,6 +24,11 @@
   background: var(--bg-sunken); border-radius: var(--radius-sm);
   padding: 1px 6px; font-size: var(--text-xs);
 }
+.card__editprimary {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  color: var(--text-muted); font-size: var(--text-sm); line-height: 1;
+}
+.card__editprimary:hover { color: var(--accent); }
 .card__words,
 .card__chapters,
 .card__date { color: var(--text-muted); font-variant-numeric: tabular-nums; }

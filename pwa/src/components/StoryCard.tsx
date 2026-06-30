@@ -35,6 +35,7 @@ export function StoryCard({
   onFavorite,
   onPin,
   onStatus,
+  onEditPrimary,
   canAddToList,
 }: {
   work: Work
@@ -51,6 +52,8 @@ export function StoryCard({
   onFavorite?: (next: boolean) => void
   onPin?: (next: boolean) => void
   onStatus?: (next: ReadStatus) => void
+  /** Open the primary ship/collection editor (Browse only). Omit to hide the ✎. */
+  onEditPrimary?: () => void
   /** Enable the "+ List" add-to-list menu (real app only; the gallery omits it). */
   canAddToList?: boolean
 }) {
@@ -124,6 +127,10 @@ export function StoryCard({
             <span className="card__ship card__ship--gen">Gen</span>
           )}
           {work.primaryCollection && <span className="card__coll">{work.primaryCollection}</span>}
+          {onEditPrimary && (
+            <button className="card__editprimary" onClick={onEditPrimary}
+                    title="Edit primary ship / fandom" aria-label="Edit primary ship or fandom">✎</button>
+          )}
           <span className="card__words">{fmtWords(work.wordcount)} words</span>
           {work.chapterCount && (
             <span className="card__chapters">{work.chapterCount} ch{work.isComplete ? '' : ' · WIP'}</span>

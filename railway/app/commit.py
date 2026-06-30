@@ -46,20 +46,23 @@ async def maybe_commit(conn: asyncpg.Connection, queue_item_id) -> str:
     return "committed"
 
 
-async def _commit(
-    conn: asyncpg.Connection, row, proposals: NormalizationProposals
+async def upsert_work(
+    conn: asyncpg.Connection,
+    work_id: int,
+    capture: RawCapture,
+    proposals: NormalizationProposals,
+    staging_key: str | None,
 ) -> None:
-    work_id: int = row["work_id"]
-    capture = RawCapture(**(row["raw_metadata"] or {}))
-    staging_key: str | None = row["staging_key"]
-
-    # 1. epub: staging -> permanent (before the DB write; never commit w/o epub).
+    """Copy the staged epub to its permanent key, then upsert works + work_authors +
+    work_tags in one transaction, then drop the staging object. Shared by the legacy
+    queue_items commit and the pending-queue capture apply. Idempotent (edges are
+    replaced), so a re-commit is safe. Never commits a work without its epub: the R2
+    copy precedes the DB write."""
     epub_r2_key: str | None = None
     if r2.is_configured() and staging_key:
         epub_r2_key = r2.epub_key(work_id)
         await r2.copy(staging_key, epub_r2_key)
 
-    # 2. DB writes — one transaction.
     async with conn.transaction():
         await conn.execute(
             """
@@ -132,17 +135,31 @@ async def _commit(
                 prop.is_primary_ship, prop.is_primary_collection,
             )
 
-        await conn.execute(
-            "UPDATE queue_items SET state='committed', error=NULL, updated_at=now() "
-            "WHERE queue_item_id = $1",
-            row["queue_item_id"],
-        )
-
-    # 3. clean up staging (best-effort; a leftover is harmless).
+    # clean up staging (best-effort; a leftover is harmless).
     if r2.is_configured() and staging_key:
         try:
             await r2.delete(staging_key)
         except Exception:  # noqa: BLE001
             pass
 
-    # 4. Phase C: trigger snapshot rebuild + snapshot_versions bump here.
+
+async def _commit(
+    conn: asyncpg.Connection, row, proposals: NormalizationProposals
+) -> None:
+    work_id: int = row["work_id"]
+    await upsert_work(
+        conn, work_id, RawCapture(**(row["raw_metadata"] or {})), proposals, row["staging_key"]
+    )
+    await conn.execute(
+        "UPDATE queue_items SET state='committed', error=NULL, updated_at=now() "
+        "WHERE queue_item_id = $1",
+        row["queue_item_id"],
+    )
+    # Resolve sibling queue items for the same work (duplicate captures) so an orphan
+    # row for an already-committed work stops relisting.
+    await conn.execute(
+        "UPDATE queue_items SET state='committed', error=NULL, updated_at=now() "
+        "WHERE work_id = $1 AND queue_item_id <> $2 "
+        "AND state IN ('pending','normalized','needs_review','auto_committed')",
+        work_id, row["queue_item_id"],
+    )

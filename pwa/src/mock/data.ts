@@ -9,6 +9,7 @@ export type Availability = 'live' | 'deleted' | 'locked' | 'n/a'
 
 export type Category =
   | 'Fandom' | 'Relationship' | 'Character'
+  | 'Trait'      // property-group bundle (§6.3.1) — a filterable roll-up of tags
   | 'Identity'   // Adopted 2026-06-14 (real-data audit still planned): what a
                  //   character IS in this AU — species/role/state (Vampire X,
                  //   Human Y, Trans Z). Distinct from Character (who) and
@@ -43,6 +44,7 @@ export type Work = {
   dateAdded?: string              // human display string (mock)
   dateRead?: string | null
   summary: string
+  personalNotes?: string | null     // user's freeform private note (shown on card)
   tags: Tag[]                       // effective canonical tags, mixed categories
   series?: {
     name: string
@@ -781,7 +783,9 @@ export const NAV_ITEMS = [
   { id: 'filters', label: 'Saved Filters', icon: '⭐' },
   { id: 'lists', label: 'Reading Lists', icon: '📚' },
   { id: 'review', label: 'Review Queue', icon: '📥', badge: 3 },
+  { id: 'pending', label: 'Pending', icon: '⏳' },
   { id: 'tags', label: 'Tags', icon: '🏷️' },
+  { id: 'stats', label: 'Stats', icon: '📊' },
   { id: 'sync', label: 'Sync', icon: '🔄' },
   { id: 'settings', label: 'Settings', icon: '⚙️' },
 ] as const

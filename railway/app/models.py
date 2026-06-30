@@ -14,7 +14,7 @@ from datetime import datetime
 from enum import Enum
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # --- Enums -------------------------------------------------------------------
@@ -120,6 +120,7 @@ class WorkUpsert(BaseModel):
     read_status: ReadStatus = ReadStatus.unread
     is_favorite: bool = False
     pinned: bool = False
+    personal_notes: str | None = None
     date_read: datetime | None = None
     date_added: datetime | None = None
     availability: Availability = Availability.live
@@ -136,8 +137,16 @@ class WorkPatch(BaseModel):
     read_status: ReadStatus | None = None
     is_favorite: bool | None = None
     pinned: bool | None = None
+    personal_notes: str | None = None
     date_read: datetime | None = None
     availability: Availability | None = None
+
+
+class ReconcileFavoritesRequest(BaseModel):
+    """The AO3-bookmarked work ids (scraped by the extension, the only client with an
+    AO3 session). The server flips matching library works to is_favorite — see
+    works.reconcile_favorites for the read-status/date semantics."""
+    work_ids: list[int]
 
 
 class Work(BaseModel):
@@ -158,6 +167,7 @@ class Work(BaseModel):
     read_status: ReadStatus
     is_favorite: bool
     pinned: bool
+    personal_notes: str | None = None
     date_read: datetime | None = None
     date_added: datetime | None = None
     availability: Availability
@@ -167,6 +177,14 @@ class Work(BaseModel):
     cover_r2_key: str | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class WorkCollectionAdd(BaseModel):
+    """Add a fandom tag edge to an existing work (curation: the real fandom was never
+    on the work because the author filed only a ship-as-fandom, e.g. "Dramione -
+    Fandom"). Optionally make it the primary collection in the same call."""
+    tag_id: int
+    set_primary: bool = False
 
 
 # --- tags --------------------------------------------------------------------
@@ -186,13 +204,35 @@ class TagCreate(BaseModel):
 
 class TagPatch(BaseModel):
     """Tag Management curation (Phase G): display alias, category, synonym
-    canonical, state. canonical_tag_id set => this tag is a synonym of that
-    canonical (§6.3.1 refinement, [RESOLVED #1])."""
+    canonical, state, kind. canonical_tag_id set => this tag is a synonym of that
+    canonical (§6.3.1 refinement, [RESOLVED #1]). kind is editable because AO3
+    authors mis-file tags (e.g. a ship typed on the character line) — changing it
+    moves the tag to the right Browse box and clears now-invalid primary flags."""
     display_name: str | None = None
     category: str | None = None
     canonical_tag_id: int | None = None
     state: TagState | None = None
     auto_classified: bool | None = None
+    kind: TagKind | None = None
+
+
+class TagBulkPatch(BaseModel):
+    """Apply one patch to many tags in a single request — bulk Tag-Management actions
+    (Confirm / Favorite / Exclude / Set category / Synonym) over a large selection.
+    The client must NOT fan out one PATCH per tag (thousands of concurrent fetches
+    fail as 'Failed to fetch')."""
+    tag_ids: list[int]
+    patch: TagPatch
+
+
+class TagStateByBrowse(BaseModel):
+    """Set a tag's state from a Browse filter box, which knows the chip's display
+    label + which category box it's in but not the tag_id. The hub resolves the
+    live canonical tag (Browse favorites read live, not from the snapshot, so the
+    resolution must be live too)."""
+    name: str
+    browse_category: str
+    state: TagState
 
 
 class Tag(BaseModel):
@@ -397,6 +437,52 @@ class WorkerStatus(BaseModel):
     recent_log_lines: list[str] | None = None
 
 
+# --- pc_jobs (§12.4 — worker thin-agent job queue) ---------------------------
+
+class PcJobType(str, Enum):
+    x4_transfer = "x4_transfer"
+    backup_pull = "backup_pull"
+
+
+class PcJobStatus(str, Enum):
+    pending = "pending"
+    running = "running"
+    done = "done"
+    failed = "failed"
+
+
+class PcJobCreate(BaseModel):
+    job_type: PcJobType
+    params: dict = Field(default_factory=dict)
+
+
+class PcJobClaim(BaseModel):
+    worker_id: str
+
+
+class PcJobFinish(BaseModel):
+    # Worker's terminal report. status is done | failed; log is the full run output.
+    status: PcJobStatus
+    log: str | None = None
+
+
+class PcJobProgress(BaseModel):
+    # Mid-run log update so the dashboard can show progress before the job finishes.
+    log: str
+
+
+class PcJob(BaseModel):
+    id: UUID
+    job_type: PcJobType
+    params: dict
+    status: PcJobStatus
+    log: str | None = None
+    worker_id: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+
+
 # --- reading_lists (§6.4) ----------------------------------------------------
 
 class ReadingListCreate(BaseModel):
@@ -470,3 +556,67 @@ class SavedFilter(BaseModel):
     display_order: int | None = None
     created_at: datetime
     updated_at: datetime
+
+
+# --- pending_changes (pending-queue redesign — supersedes §12.2) --------------
+
+class PendingAction(str, Enum):
+    capture = "capture"        # add a new work (library: create; AO3: mark_for_later)
+    mark_read = "mark_read"
+    mark_unread = "mark_unread"
+    mark_dnf = "mark_dnf"
+    favorite = "favorite"      # library: is_favorite+Read; AO3: private bookmark+read
+    unfavorite = "unfavorite"  # library: is_favorite=false; AO3: remove bookmark
+
+
+class PendingSide(str, Enum):
+    pending = "pending"
+    done = "done"
+    na = "na"                  # this action has no effect on this surface
+
+
+class PendingOrigin(str, Enum):
+    ao3 = "ao3"
+    pwa = "pwa"
+
+
+class PendingCreate(BaseModel):
+    work_id: int
+    action: PendingAction
+    origin: PendingOrigin = PendingOrigin.pwa
+    title: str | None = None
+    author: str | None = None
+    payload: dict = {}
+    staging_key: str | None = None
+
+
+class PendingChange(BaseModel):
+    id: UUID
+    work_id: int
+    action: PendingAction
+    title: str | None = None
+    author: str | None = None
+    payload: dict = {}
+    staging_key: str | None = None
+    ao3_state: PendingSide
+    library_state: PendingSide
+    origin: PendingOrigin
+    error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CaptureRequest(BaseModel):
+    """PWA "Add by URL" / share-target request. Either a full AO3 work URL (parsed
+    server-side) or a bare work_id. The PWA can't scrape/fetch the epub (AO3's
+    Cloudflare wall), so this only leaves a capture STUB; the PC drains it later
+    (its content-script fetch fills in metadata + epub, superseding the stub)."""
+    url: str | None = None
+    work_id: int | None = None
+
+
+class CaptureRequestResult(BaseModel):
+    """Outcome of a request-capture call, so the PWA can toast the right thing."""
+    status: str  # "queued" | "already_queued" | "already_in_library"
+    work_id: int
+    pending: PendingChange | None = None

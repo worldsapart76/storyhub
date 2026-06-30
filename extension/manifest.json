@@ -31,11 +31,12 @@
         "lib/badge.js",
         "lib/ao3.js",
         "lib/api.js",
+        "lib/capture.js",
         "content/badges.js",
         "content/work.js",
-        "content/drain.js"
+        "content/drawer.js"
       ],
-      "css": ["content/badges.css", "content/work.css"],
+      "css": ["content/badges.css", "content/work.css", "content/drawer.css"],
       "run_at": "document_idle"
     }
   ],

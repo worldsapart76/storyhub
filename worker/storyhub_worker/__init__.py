@@ -1,9 +1,9 @@
-"""StoryHub local worker.
+"""StoryHub local worker — a thin Windows agent (redesign §12.4).
 
-Phase 1 is a *shell*: it heartbeats to Railway, drains the pending queue, and
-acks each item as `done` without doing any actual work (no Calibre, no R2).
-Real processing — Calibre REST add, normalization, R2, FanFicFare, X4 — lands
-in Phase 2. See docs/components/worker.md and docs/build-phases.md.
+Heartbeats to Railway and runs the two PC-bound `pc_jobs`: X4 SD-card transfer and
+local backup pull. No Calibre, no FanFicFare, no normalization — all of that is
+server-side; the worker only reads the snapshot + epubs from R2 and moves files.
+See docs/calibre-removal-redesign.md §12.4–12.5.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

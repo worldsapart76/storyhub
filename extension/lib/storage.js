@@ -41,5 +41,14 @@
     async setSnapshotMeta(meta) {
       await set({ [META_KEY]: meta })
     },
+
+    // AO3 default pseud id (for creating bookmarks from any page, incl. the drain).
+    async getPseudId() {
+      const { pseudId } = await get('pseudId')
+      return pseudId || null
+    },
+    async setPseudId(id) {
+      await set({ pseudId: id })
+    },
   }
 })()

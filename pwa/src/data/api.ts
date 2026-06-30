@@ -14,6 +14,7 @@ export async function patchWork(workId: number, edit: Edit): Promise<ApiResult> 
   if (edit.readStatus !== undefined) body.read_status = edit.readStatus
   if (edit.isFavorite !== undefined) body.is_favorite = edit.isFavorite
   if (edit.pinned !== undefined) body.pinned = edit.pinned
+  if (edit.personalNotes !== undefined) body.personal_notes = edit.personalNotes
   try {
     const res = await fetch(`${getHub()}/api/works/${workId}`, {
       method: 'PATCH',

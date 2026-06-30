@@ -7,27 +7,16 @@ import { BulkBar } from './BulkBar'
 import { Reader } from './Reader'
 import { FunnelIcon, SortIcon } from './Icons'
 import { SORT_OPTIONS } from '../mock/data'
+import { comparator } from '../data/sort'
 import { useLibrary } from '../data/library'
 import { useNav } from '../data/appnav'
 import { applyFilters, buildFacets, dependentFacets, emptyFilter, activeCount, type FilterState } from '../data/filters'
 import { createSavedFilter, fetchReadingLists, fetchSavedFilters, type ReadingListRow, type SavedFilterRow } from '../data/lists'
-import { fetchFavoriteTagNames } from '../data/tags'
+import { fetchFavoriteTagNames, setTagStateByBrowse, readKeptFandomNames } from '../data/tags'
+import { isSnapshotDirty, markSnapshotDirty, onSnapshotDirtyChange, rebuildSnapshot } from '../data/snapshot'
+import { usePersistentState } from '../data/persist'
+import { PrimaryEditor } from './PrimaryEditor'
 import type { Work } from '../data/types'
-
-/* Sort comparators keyed by SORT_OPTIONS.label. Dates compare on raw epoch-ms
-   (the dateAdded/dateRead strings are display-formatted — never compare those). */
-function comparator(label: string): (a: Work, b: Work) => number {
-  switch (label) {
-    case 'Date added — newest': return (a, b) => (b.dateAddedTs ?? 0) - (a.dateAddedTs ?? 0)
-    case 'Date added — oldest': return (a, b) => (a.dateAddedTs ?? 0) - (b.dateAddedTs ?? 0)
-    case 'Date read — newest': return (a, b) => (b.dateReadTs ?? 0) - (a.dateReadTs ?? 0)
-    case 'Word count — high to low': return (a, b) => b.wordcount - a.wordcount
-    case 'Word count — low to high': return (a, b) => a.wordcount - b.wordcount
-    case 'Title — A to Z': return (a, b) => a.title.localeCompare(b.title)
-    case 'Author — A to Z': return (a, b) => (a.authors[0] ?? '').localeCompare(b.authors[0] ?? '')
-    default: return () => 0
-  }
-}
 
 /* The quick-chip row holds two starred kinds, color-coded: reading LISTS (★) and
    saved FILTERS (funnel glyph), both loaded live from the hub. Saved filters are
@@ -46,23 +35,45 @@ export function BrowseView() {
   const listRef = useRef<HTMLDivElement>(null)
   const [wide, setWide] = useState(true)
   const [userOpen, setUserOpen] = useState<boolean | null>(null)
-  const [sort, setSort] = useState(SORT_OPTIONS[0])
+  // Persisted (survive navigation + app reload): sort, search, filter, active chip.
+  const [sortLabel, setSortLabel] = usePersistentState('sh.browse.sort', SORT_OPTIONS[0].label)
+  const sort = SORT_OPTIONS.find((o) => o.label === sortLabel) ?? SORT_OPTIONS[0]
+  const setSort = (o: typeof SORT_OPTIONS[number]) => setSortLabel(o.label)
   const [sortMenu, setSortMenu] = useState(false)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = usePersistentState('sh.browse.query', '')
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [readerWork, setReaderWork] = useState<Work | null>(null)
-  const [filter, setFilter] = useState<FilterState>(emptyFilter)
+  const [filter, setFilter] = usePersistentState<FilterState>('sh.browse.filter', emptyFilter)
   const [quickLists, setQuickLists] = useState<ReadingListRow[]>([])
   const [quickFilters, setQuickFilters] = useState<SavedFilterRow[]>([])
   const [activeList, setActiveList] = useState<ReadingListRow | null>(null)
-  const [activeChip, setActiveChip] = useState<string | null>(null)
+  const [activeChip, setActiveChip] = usePersistentState<string | null>('sh.browse.activeChip', null)
   const [favTags, setFavTags] = useState<Set<string>>(new Set())
+  const [editingWork, setEditingWork] = useState<Work | null>(null)
 
-  const { works, update } = useLibrary()
+  const { works, update, db, patchLocal } = useLibrary()
   const { pending, consumePending } = useNav()
   const persist = (workId: number, edit: Parameters<typeof update>[1]) =>
     update(workId, edit).then((err) => { if (err) alert(`Save failed: ${err}`) })
-  const facets = useMemo(() => buildFacets(works, favTags), [works, favTags])
+  // Kept fandoms = fandoms that are some work's primary collection (derived). The
+  // Browse Fandom filter is restricted to these so non-primary crossover/anthology
+  // fandoms don't clutter it (chips on cards are unaffected).
+  const keptFandoms = useMemo(() => readKeptFandomNames(db), [db])
+  const facets = useMemo(() => buildFacets(works, favTags, keptFandoms), [works, favTags, keptFandoms])
+
+  // Persist a favorited chip. The hub resolves the live canonical tag from the box
+  // (category) + chip label (name) — live, not the snapshot, so it can't drift from
+  // the favorite stars (which are also read live).
+  const rollback = (name: string, fav: boolean) =>
+    setFavTags((prev) => { const n = new Set(prev); fav ? n.delete(name) : n.add(name); return n })
+  const toggleTagFavorite = (category: string, name: string, fav: boolean) => {
+    setFavTags((prev) => { const n = new Set(prev); fav ? n.add(name) : n.delete(name); return n })
+    setTagStateByBrowse(name, category, fav ? 'favorite' : 'normal')
+      .then((updated) => {
+        if (updated === 0) { rollback(name, fav); alert(`Couldn't find “${name}” to ${fav ? 'favorite' : 'unfavorite'}.`) }
+      })
+      .catch((e) => { rollback(name, fav); alert(`Save failed: ${e instanceof Error ? e.message : e}`) })
+  }
 
   // Favorites is a client-synthesized system list; the rest are starred API lists.
   const favoriteIds = useMemo(() => works.filter((w) => w.isFavorite).map((w) => w.workId), [works])
@@ -94,6 +105,43 @@ export function BrowseView() {
   // Co-occurrence-aware facet counts for the panel (leave-one-out per facet).
   const facetLive = useMemo(() => dependentFacets(searched, filter), [searched, filter])
 
+  // Group works by series name so a card can show its in-library siblings. Only
+  // series with ≥2 works in the library are kept (a lone part stays a plain card);
+  // siblings are the full Works (sorted by series index) so a row can expand into a
+  // real sub-card.
+  const seriesMap = useMemo(() => {
+    const byName = new Map<string, Work[]>()
+    for (const w of works) {
+      const name = w.seriesName?.trim()
+      if (!name) continue
+      const arr = byName.get(name)
+      if (arr) arr.push(w)
+      else byName.set(name, [w])
+    }
+    for (const [name, arr] of byName) {
+      if (arr.length < 2) byName.delete(name)
+      else arr.sort((a, b) => (a.seriesIndex ?? Infinity) - (b.seriesIndex ?? Infinity))
+    }
+    return byName
+  }, [works])
+  // Which works are in the current filtered results — drives the "N of M match" line.
+  const resultIds = useMemo(() => new Set(results.map((w) => w.workId)), [results])
+  // Attach the assembled (filter-dependent) series object to a card for rendering.
+  const withSeries = (w: Work): Work => {
+    const sibs = w.seriesName ? seriesMap.get(w.seriesName.trim()) : undefined
+    if (!sibs) return w
+    return {
+      ...w,
+      series: {
+        name: w.seriesName!.trim(),
+        index: w.seriesIndex ?? sibs.findIndex((s) => s.workId === w.workId) + 1,
+        total: sibs.length,
+        siblings: sibs,
+        matchIds: sibs.filter((s) => resultIds.has(s.workId)).map((s) => s.workId),
+      },
+    }
+  }
+
   const filterCount = activeCount(filter)
 
   // Load the starred quick-chips (lists + filters) and favorited tags live.
@@ -102,6 +150,15 @@ export function BrowseView() {
     fetchSavedFilters().then((fs) => setQuickFilters(fs.filter((f) => f.starred))).catch(() => {})
     fetchFavoriteTagNames().then(setFavTags).catch(() => {})
   }, [])
+
+  // After a reload, re-attach a persisted reading-LIST chip once the lists arrive
+  // (its membership isn't in `filter`; saved-FILTER chips restore via `filter`).
+  useEffect(() => {
+    if (activeChip?.startsWith('l') && !activeList) {
+      const l = listChips.find((x) => 'l' + x.id === activeChip)
+      if (l) setActiveList(l)
+    }
+  }, [listChips, activeChip, activeList])
 
   // Consume a filter handed over from the Saved Filters surface ("Apply").
   useEffect(() => {
@@ -139,6 +196,10 @@ export function BrowseView() {
     estimateSize: () => 240,
     overscan: 6,
     scrollMargin: listRef.current?.offsetTop ?? 0,
+    // Key measured heights by work, not by index — otherwise filtering/sorting (which
+    // changes which work sits at each index) reuses the previous work's cached height
+    // and cards overlap. Tying the cache to workId makes heights follow the card.
+    getItemKey: (index) => results[index]?.workId ?? index,
   })
 
   const saveCurrentFilter = (name: string, starred: boolean) => {
@@ -172,6 +233,7 @@ export function BrowseView() {
                value={query} onChange={(e) => setQuery(e.target.value)} />
 
         <div className="browse__tools">
+          <BrowseRebuild />
           <div className="browse__sortwrap">
             <button className="browse__iconbtn" onClick={() => setSortMenu((o) => !o)} aria-haspopup="listbox" aria-expanded={sortMenu}>
               <SortIcon />
@@ -248,7 +310,7 @@ export function BrowseView() {
           <div className="browse__list" ref={listRef}
                style={{ height: rowV.getTotalSize(), position: 'relative' }}>
             {rowV.getVirtualItems().map((vi) => {
-              const w = results[vi.index]
+              const w = withSeries(results[vi.index])
               return (
                 <div key={w.workId} data-index={vi.index} ref={rowV.measureElement}
                      style={{ position: 'absolute', top: 0, left: 0, width: '100%',
@@ -259,6 +321,7 @@ export function BrowseView() {
                              onFavorite={(v) => persist(w.workId, { isFavorite: v })}
                              onPin={(v) => persist(w.workId, { pinned: v })}
                              onStatus={(st) => persist(w.workId, { readStatus: st })}
+                             onEditPrimary={() => setEditingWork(w)}
                              canAddToList />
                 </div>
               )
@@ -269,11 +332,44 @@ export function BrowseView() {
         {/* Drawer scrim only when overlaying (narrow + open) */}
         {panelOpen && !wide && <div className="browse__scrim" onClick={() => setUserOpen(false)} />}
         <aside className={'browse__panel' + (panelOpen ? ' is-open' : '')} aria-hidden={!panelOpen}>
-          <FilterPanel value={filter} onChange={setFilter} facets={facets} live={facetLive} onSaveFilter={saveCurrentFilter} />
+          <FilterPanel value={filter} onChange={setFilter} facets={facets} live={facetLive} onSaveFilter={saveCurrentFilter} onToggleTagFavorite={toggleTagFavorite}
+            onClearAll={() => { setFilter(emptyFilter()); setQuery(''); clearActive() }}
+            extraActive={query.trim().length > 0 || activeChip !== null} />
         </aside>
       </div>
 
       {readerWork && <Reader work={readerWork} onClose={() => setReaderWork(null)} />}
+      {editingWork && (
+        <PrimaryEditor
+          work={editingWork}
+          db={db}
+          onClose={() => setEditingWork(null)}
+          onSaved={(patch) => { patchLocal(editingWork.workId, patch); markSnapshotDirty(); setEditingWork(null) }}
+        />
+      )}
     </div>
+  )
+}
+
+/* Apply pending curation (tag edits, primary-ship/collection edits) to Browse by
+   rebuilding the snapshot, then reloading. Only appears when there are unapplied
+   changes — so it's an explicit "push my edits live" affordance, not clutter. */
+function BrowseRebuild() {
+  const { reload } = useLibrary()
+  const [dirty, setDirty] = useState(isSnapshotDirty())
+  const [busy, setBusy] = useState(false)
+  useEffect(() => onSnapshotDirtyChange(() => setDirty(isSnapshotDirty())), [])
+  if (!dirty && !busy) return null
+  const run = () => {
+    setBusy(true)
+    rebuildSnapshot().then(() => reload())
+      .catch((e) => alert(`Rebuild failed: ${e instanceof Error ? e.message : e}`))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <button className="browse__rebuild" onClick={run} disabled={busy}
+            title="Apply your tag / primary edits to Browse (rebuild snapshot)">
+      {busy ? 'Applying…' : '● Apply changes'}
+    </button>
   )
 }

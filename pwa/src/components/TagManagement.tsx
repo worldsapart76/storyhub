@@ -4,7 +4,8 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import './TagManagement.css'
 import { useLibrary } from '../data/library'
 import {
-  fetchTags, patchTag, readTagCounts,
+  fetchTags, patchTag, bulkPatchTags, readTagCounts, readTagIdsForFandom, readKeptFandomNames,
+  readOrphanCandidateTagIds, readPrimaryShipTagIds,
   fetchGroups, createGroup, addGroupMember, removeGroupMember, deleteGroup,
   groupClassOf, canBeSynonymOf,
   type ManagedTag, type TagKind, type TagState, type TagGroup,
@@ -14,6 +15,7 @@ import {
   reorderCategories, setCategoryLock, type Category,
 } from '../data/categories'
 import { markSnapshotDirty, isSnapshotDirty, onSnapshotDirtyChange, rebuildSnapshot } from '../data/snapshot'
+import { usePersistentState } from '../data/persist'
 import { useNav } from '../data/appnav'
 import { emptyFilter } from '../data/filters'
 
@@ -92,7 +94,7 @@ function RebuildButton() {
 }
 
 export function TagManagement() {
-  const [tab, setTab] = useState<'tags' | 'categories'>('tags')
+  const [tab, setTab] = usePersistentState<'tags' | 'categories'>('sh.tm.tab', 'tags')
   return (
     <div className="tm">
       {tab === 'tags' ? <TagsView tab={tab} setTab={setTab} /> : <CategoriesView tab={tab} setTab={setTab} />}
@@ -181,13 +183,18 @@ function TagsView({ tab, setTab }: TabProps) {
   const tagsRef = useRef<ManagedTag[]>([])
   tagsRef.current = tags
 
-  const [search, setSearch] = useState('')
-  const [kind, setKind] = useState<TagKind | 'all'>('all')
-  const [cat, setCat] = useState<string | 'all'>('all')
-  const [state, setState] = useState<TagState | 'all'>('all')
-  const [quick, setQuick] = useState<Set<string>>(new Set())
+  // Persisted (survive navigation + reload) — e.g. ↗ to Browse and back keeps these.
+  const [search, setSearch] = usePersistentState('sh.tm.search', '')
+  const [kind, setKind] = usePersistentState<TagKind | 'all'>('sh.tm.kind', 'all')
+  const [cat, setCat] = usePersistentState<string | 'all'>('sh.tm.cat', 'all')
+  const [state, setState] = usePersistentState<TagState | 'all'>('sh.tm.state', 'all')
+  const [fandom, setFandom] = usePersistentState<{ id: number; name: string } | null>('sh.tm.fandom', null)
+  const [fandomKeptOnly, setFandomKeptOnly] = usePersistentState('sh.tm.fandomKeptOnly', true)
+  // quick filters persisted as an array (Set isn't JSON-serializable), used as a Set.
+  const [quickArr, setQuickArr] = usePersistentState<string[]>('sh.tm.quick', [])
+  const quick = useMemo(() => new Set(quickArr), [quickArr])
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [sort, setSort] = useState<{ key: 'name' | 'count'; dir: 'asc' | 'desc' }>({ key: 'name', dir: 'asc' })
+  const [sort, setSort] = usePersistentState<{ key: 'name' | 'count'; dir: 'asc' | 'desc' }>('sh.tm.sort', { key: 'name', dir: 'asc' })
   const [synRow, setSynRow] = useState<number | null>(null)
   const [groupRow, setGroupRow] = useState<number | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null) // trigger rect for the portal'd row picker
@@ -214,6 +221,22 @@ function TagsView({ tab, setTab }: TabProps) {
   }, [tags])
   // Dropdown options are the live category set (FK-valid names), in display order.
   const cats = useMemo(() => categories.map((c) => c.name), [categories])
+  // Fandom filter: pick a (canonical) fandom → restrict to tags co-occurring on its
+  // works. Options exclude synonym fandoms (works project under the canonical).
+  const fandomOpts = useMemo<Opt[]>(() => tags.filter((t) => t.kind === 'fandom' && t.canonicalTagId == null)
+    .map((t) => ({ key: String(t.id), label: t.displayName ?? t.name })), [tags])
+  const fandomTagIds = useMemo(() => (fandom ? readTagIdsForFandom(db, fandom.id) : null), [fandom, db])
+  // Kept (primary) fandoms — default the fandom picker to just these so it's not
+  // cluttered by crossover/anthology drag-ins, but allow showing ALL (the toggle)
+  // for curation that needs the non-primary ones (e.g. excluding their orphan tags).
+  const keptFandoms = useMemo(() => readKeptFandomNames(db), [db])
+  // Orphan ship/char candidates (only ever in crossover works) — the "Orphans" quick
+  // filter; safe to bulk-exclude (shared-with-kept tags are excluded from the set).
+  const orphanCandidates = useMemo(() => readOrphanCandidateTagIds(db), [db])
+  // Primary-ship tags — the set the user actually wants to curate (the "Primaries" chip).
+  const primaryShipTagIds = useMemo(() => readPrimaryShipTagIds(db), [db])
+  const shownFandomOpts = useMemo(() => (fandomKeptOnly && keptFandoms.size > 0
+    ? fandomOpts.filter((o) => keptFandoms.has(o.label)) : fandomOpts), [fandomOpts, fandomKeptOnly, keptFandoms])
   const countOf = (t: ManagedTag) => counts.get(t.id) ?? 0
   const canonName = (id: number) => { const c = byId.get(id); return c ? (c.displayName ?? c.name) : '?' }
   const synCountOf = (t: ManagedTag) => synCounts.get(t.id) ?? 0
@@ -232,11 +255,14 @@ function TagsView({ tab, setTab }: TabProps) {
     if (kind !== 'all' && t.kind !== kind) return false
     if (cat !== 'all' && t.category !== cat) return false
     if (state !== 'all' && t.state !== state) return false
+    if (fandomTagIds && !fandomTagIds.has(t.id)) return false
     if (quick.has('uncat') && !(t.category === null && categoryAllowed(t.kind))) return false
     if (quick.has('auto') && !t.autoClassified) return false
     if (quick.has('ungrouped') && ((groupsByTag.get(t.id)?.length ?? 0) > 0 || !!t.canonicalTagId)) return false
+    if (quick.has('orphan') && !orphanCandidates.has(t.id)) return false
+    if (quick.has('primaries') && !primaryShipTagIds.has(t.id)) return false
     return true
-  }), [tags, search, kind, cat, state, quick, groupsByTag])
+  }), [tags, search, kind, cat, state, quick, groupsByTag, fandomTagIds, orphanCandidates, primaryShipTagIds])
 
   const sorted = useMemo(() => {
     const arr = [...filtered]
@@ -259,6 +285,10 @@ function TagsView({ tab, setTab }: TabProps) {
     estimateSize: () => 46,
     overscan: 10,
     scrollMargin: listRef.current?.offsetTop ?? 0,
+    // Key heights by tag_id, not index — filtering/sorting changes which tag is at each
+    // index, and (now that names wrap → variable height) reusing the previous tag's
+    // cached height by index makes rows overlap. Tie the cache to the tag.
+    getItemKey: (index) => sorted[index]?.id ?? index,
   })
 
   // --- tag edits (optimistic + rollback) ---
@@ -273,8 +303,9 @@ function TagsView({ tab, setTab }: TabProps) {
   const bulk = (patch: Partial<ManagedTag>, api: Parameters<typeof patchTag>[1], guard?: (t: ManagedTag) => boolean) => {
     const ids = tags.filter((t) => selected.has(t.id) && (!guard || guard(t))).map((t) => t.id)
     if (!ids.length) return
-    setTags((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, ...patch } : t)))
-    Promise.all(ids.map((id) => patchTag(id, api))).then(() => markSnapshotDirty()).catch((e) => {
+    const idSet = new Set(ids)  // Set, not ids.includes — O(n) not O(n·m) over ~32k tags
+    setTags((prev) => prev.map((t) => (idSet.has(t.id) ? { ...t, ...patch } : t)))
+    bulkPatchTags(ids, api).then(() => markSnapshotDirty()).catch((e) => {
       alert(`Some changes failed: ${e instanceof Error ? e.message : e}`)
       fetchTags().then(setTags).catch(() => {})
     })
@@ -318,8 +349,9 @@ function TagsView({ tab, setTab }: TabProps) {
     // only selected tags that may be syn'd to the canonical, aren't it, and aren't themselves canonicals
     const ids = selTags().filter((t) => t.id !== canonicalId && canBeSynonymOf(t, canon) && synCountOf(t) === 0).map((t) => t.id)
     if (!ids.length) { alert('No selected tags can be synonyms of that canonical.'); return }
-    setTags((prev) => prev.map((t) => (ids.includes(t.id) ? { ...t, canonicalTagId: canonicalId } : t)))
-    Promise.all(ids.map((id) => patchTag(id, { canonical_tag_id: canonicalId }))).then(() => markSnapshotDirty())
+    const idSet = new Set(ids)
+    setTags((prev) => prev.map((t) => (idSet.has(t.id) ? { ...t, canonicalTagId: canonicalId } : t)))
+    bulkPatchTags(ids, { canonical_tag_id: canonicalId }).then(() => markSnapshotDirty())
       .catch((e) => { alert(`Some changes failed: ${e instanceof Error ? e.message : e}`); fetchTags().then(setTags).catch(() => {}) })
   }
   const bulkAddGroup = (groupId: number) => {
@@ -359,7 +391,13 @@ function TagsView({ tab, setTab }: TabProps) {
     return groups.filter((g) => g.groupType === cls && !mine.has(g.id)).map((g) => ({ key: String(g.id), label: g.name, mark: CLASS_MARK[g.groupType] }))
   }
 
-  const toggleQuick = (q: string) => setQuick((p) => { const n = new Set(p); n.has(q) ? n.delete(q) : n.add(q); return n })
+  // Filters are persisted (localStorage) and combine — a stuck category/quick/fandom
+  // filter incompatible with the chosen kind silently zeroes results (e.g. a freeform-
+  // only category + kind=relationship). Surface a one-click reset whenever any is set.
+  const filtersActive = !!search || kind !== 'all' || cat !== 'all' || state !== 'all' || !!fandom || quickArr.length > 0
+  const clearFilters = () => { setSearch(''); setKind('all'); setCat('all'); setState('all'); setFandom(null); setQuickArr([]) }
+
+  const toggleQuick = (q: string) => setQuickArr((p) => (p.includes(q) ? p.filter((x) => x !== q) : [...p, q]))
   const toggleSel = (id: number) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
   const allSelected = filtered.length > 0 && filtered.every((t) => selected.has(t.id))
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(filtered.map((t) => t.id)))
@@ -387,6 +425,12 @@ function TagsView({ tab, setTab }: TabProps) {
           <option value="all">All kinds</option>
           {KINDS.map((k) => <option key={k} value={k}>{KIND_ABBR[k]}</option>)}
         </select>
+        <FandomFilter options={shownFandomOpts} value={fandom}
+          onPick={(id, name) => setFandom({ id, name })} onClear={() => setFandom(null)} />
+        <label className="tm__keptonly" title="Show only fandoms that are some work's primary collection">
+          <input type="checkbox" checked={fandomKeptOnly} onChange={(e) => setFandomKeptOnly(e.target.checked)} />
+          primary only
+        </label>
         <select className="tm__select" value={cat} onChange={(e) => setCat(e.target.value)}>
           <option value="all">All categories</option>
           {cats.map((c) => <option key={c} value={c}>{c}</option>)}
@@ -398,13 +442,24 @@ function TagsView({ tab, setTab }: TabProps) {
           <option value="excluded">Excluded</option>
         </select>
         <div className="tm__quick">
+          <button className={'tm__chip' + (quick.has('primaries') ? ' is-on' : '')} onClick={() => toggleQuick('primaries')}
+            title="Tags that are some work's primary ship — the set worth curating (merge synonyms, fix names)">
+            Primaries{primaryShipTagIds.size ? ` (${primaryShipTagIds.size})` : ''}
+          </button>
           <button className={'tm__chip' + (quick.has('uncat') ? ' is-on' : '')} onClick={() => toggleQuick('uncat')}>Uncategorized</button>
           <button className={'tm__chip' + (quick.has('ungrouped') ? ' is-on' : '')} onClick={() => toggleQuick('ungrouped')}>Ungrouped</button>
           <button className={'tm__chip' + (quick.has('auto') ? ' is-on' : '')} onClick={() => toggleQuick('auto')}>Needs review</button>
+          <button className={'tm__chip' + (quick.has('orphan') ? ' is-on' : '')} onClick={() => toggleQuick('orphan')}
+            title="Ship/character tags that appear only in crossover/anthology works (never in a work that's purely your fandoms) — safe to bulk-exclude after review">
+            Orphans{orphanCandidates.size ? ` (${orphanCandidates.size})` : ''}
+          </button>
         </div>
       </div>
 
-      <div className="tm__count">{filtered.length} of {tags.length} tags</div>
+      <div className="tm__count">
+        {filtered.length} of {tags.length} tags
+        {filtersActive && <button className="tm__clearfilters" onClick={clearFilters}>Clear filters</button>}
+      </div>
 
       {selected.size > 0 && (
         <div className="tm__bulk" role="toolbar" aria-label="Bulk tag actions">
@@ -462,7 +517,19 @@ function TagsView({ tab, setTab }: TabProps) {
                   onChange={(e) => edit(t.id, { displayName: e.target.value || null }, { display_name: e.target.value || null })} />
               </span>
 
-              <span className="tm__td tm__col-kind" data-label="Kind"><span className={'tm__kind tm__kind--' + t.kind}>{KIND_ABBR[t.kind]}</span></span>
+              <span className="tm__td tm__col-kind" data-label="Kind">
+                <select className={'tm__cellselect tm__kindselect tm__kindselect--' + t.kind} value={t.kind}
+                  title="Change kind — for tags AO3 authors filed on the wrong line"
+                  onChange={(e) => {
+                    const nk = e.target.value as TagKind
+                    // Category only belongs to freeform/warning; the hub clears it on
+                    // an incompatible kind, so mirror that optimistically.
+                    const dropCat = !categoryAllowed(nk) && t.category !== null
+                    edit(t.id, { kind: nk, ...(dropCat ? { category: null } : {}) }, { kind: nk })
+                  }}>
+                  {KINDS.map((k) => <option key={k} value={k}>{KIND_ABBR[k]}</option>)}
+                </select>
+              </span>
 
               <span className="tm__td tm__col-cat" data-label="Category">
                 <span className="tm__catwrap">
@@ -549,6 +616,28 @@ function BulkMenu({ label, options, onPick, onCreate, createNoun }: {
         <SearchMenu options={options} placeholder={`Filter ${label.toLowerCase()}…`}
           onPick={(k) => { onPick(k); setOpen(false) }} onClose={() => setOpen(false)}
           onCreate={onCreate ? (n) => { onCreate(n); setOpen(false) } : undefined} createNoun={createNoun} />
+      )}
+    </div>
+  )
+}
+
+/* Filter the tag list to one fandom's co-occurring tags. Searchable (there can be
+   hundreds of fandoms), with a clear (×) to return to all tags. */
+function FandomFilter({ options, value, onPick, onClear }: {
+  options: Opt[]; value: { id: number; name: string } | null
+  onPick: (id: number, name: string) => void; onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="tm__fandomwrap">
+      <button className={'tm__select tm__fandombtn' + (value ? ' is-on' : '')} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        {value ? `Fandom: ${value.name}` : 'Any fandom'} ▾
+      </button>
+      {value && <button className="tm__fandomclear" onClick={onClear} aria-label="Clear fandom filter">×</button>}
+      {open && (
+        <SearchMenu options={options} placeholder="Filter fandoms…"
+          onPick={(k) => { onPick(Number(k), options.find((o) => o.key === k)?.label ?? ''); setOpen(false) }}
+          onClose={() => setOpen(false)} />
       )}
     </div>
   )

@@ -6,11 +6,11 @@ with every other StoryHub client (docs/auth.md). First run writes a template
 with empty creds; the CLI then refuses to start until they're filled in, rather
 than spamming Railway with auth failures.
 
-Phase 2 adds the Calibre Content Server REST creds, the Cloudflare R2 creds, and
-the ship/collection normalization tables + FanFicFare/X4 tunables lifted from
-FFF's config.py. The normalization tables ship as defaults so settings.json is
-self-documenting and user-editable; only the secrets (Calibre password, R2 keys)
-strictly need filling in before Phase 2 work runs.
+Phase H (redesign §12.4): the worker is a **thin agent** — only two PC-bound jobs,
+X4 SD-card transfer + local backup pull. No Calibre, no FanFicFare, no
+normalization tables (all of that moved server-side). It needs the Railway hub
+creds, the Cloudflare R2 creds (to pull the snapshot + epubs), and the X4 transfer
+tunables.
 """
 
 from __future__ import annotations
@@ -25,54 +25,6 @@ SETTINGS_PATH = STORYHUB_DIR / "settings.json"
 LOG_PATH = STORYHUB_DIR / "worker.log"
 
 
-# ---------------------------------------------------------------------------
-# Normalization-table defaults (lifted verbatim from FFF's config.py).
-#
-# These seed the template settings.json. They live here only as the *default*;
-# the user edits the persisted copy under ~/.storyhub/. Functions (not bare
-# literals) because dataclass mutable defaults need a default_factory.
-# ---------------------------------------------------------------------------
-
-def _default_ship_overrides() -> dict[str, str]:
-    """Cleaned AO3 ship string -> preferred Calibre #primaryship value."""
-    return {
-        "Katniss Everdeen/Peeta Mellark": "Katniss/Peeta",
-        "Elizabeth Bennet/Fitzwilliam Darcy": "Darcy/Elizabeth",
-        'James "Bucky" Barnes/Clint Barton': "Bucky/Clint",
-        "Jason Todd/Tim Drake": "Tim Drake/Jason Todd",
-        "Regulus Black/James Potter": "Regulus/James",
-    }
-
-
-def _default_collection_keywords() -> list[list[str]]:
-    """Ordered (keyword, collection_name) pairs; first case-insensitive match
-    against the AO3 fandoms field wins. JSON has no tuples, so these round-trip
-    as 2-element lists — consumers unpack ``for keyword, name in pairs``."""
-    return [
-        ["Stray Kids", "Stray Kids"],
-        ["ATEEZ", "ATEEZ"],
-        ["Hunger Games", "Hunger Games"],
-        ["Harry Potter", "Harry Potter"],
-        ["Batman", "DCU"],
-        ["DCU", "DCU"],
-        ["DC Comics", "DCU"],
-        ["Marvel", "Marvel"],
-        ["Avengers", "Marvel"],
-        ["Pride and Prejudice", "Jane Austen"],
-        ["Jane Austen", "Jane Austen"],
-        ["Roswell New Mexico", "Roswell"],
-        ["Mass Effect", "Mass Effect"],
-        ["Dragon Age", "Dragon Age"],
-        ["Shadowhunters", "Shadowhunters"],
-        ["Mortal Instruments", "Shadowhunters"],
-        ["Star Wars", "Star Wars"],
-        ["Teen Wolf", "Teen Wolf"],
-        ["Witcher", "Witcher"],
-        ["Skyrim", "Skyrim"],
-        ["Elder Scrolls", "Skyrim"],
-    ]
-
-
 def _default_xteink_solo_fandoms() -> list[str]:
     """Fandoms that each get their own catalog EPUB (see FFF xteink-catalog)."""
     return ["Stray Kids", "Harry Potter", "Teen Wolf", "Roswell"]
@@ -80,92 +32,57 @@ def _default_xteink_solo_fandoms() -> list[str]:
 
 @dataclass
 class Settings:
-    # --- Railway hub (Phase 1) ---------------------------------------------
-    # Railway public domain, e.g. https://storyhub-api.up.railway.app
+    # --- Railway hub -------------------------------------------------------
+    # Railway public domain, e.g. https://ffstoryhub.up.railway.app
     railway_url: str = ""
     # Shared bearer token (the AUTH_TOKEN set on the Railway service).
     auth_token: str = ""
-    # Identifies this machine in worker_heartbeats; defaults to the hostname.
+    # Identifies this machine in worker_heartbeats + pc_jobs.worker_id; hostname.
     worker_id: str = field(default_factory=socket.gethostname)
-    # Queue-drain cadence (seconds).
+    # pc_jobs poll cadence (seconds) — how often we check for a job to run.
     poll_interval_seconds: float = 5.0
     # Liveness ping cadence; Railway's worker_alive_seconds is 90, so 30s gives
     # two missed beats of slack before the dashboard shows the worker offline.
     heartbeat_interval_seconds: float = 30.0
-    # Max items pulled per drain. Hitting it is logged, never silently capped
-    # (FFF "no silent caps" principle) — remaining items drain on the next poll.
-    queue_batch_limit: int = 100
 
-    # --- Calibre Content Server REST (Phase 2) -----------------------------
-    # See the calibre-rest-write-auth verification: digest-authed account with
-    # write access; localhost in normal operation, LAN host as a fallback.
-    calibre_url: str = "http://localhost:8080"
-    calibre_username: str = "storyhub"
-    calibre_password: str = ""
-    # Default library on the content server. CLAUDE.md: "FanFiction".
-    calibre_library_id: str = "FanFiction"
-    # Per-call timeout (seconds). add-book on a large library can be slow.
-    calibre_timeout_seconds: float = 60.0
-
-    # --- Cloudflare R2 (Phase 2) -------------------------------------------
+    # --- Cloudflare R2 -----------------------------------------------------
     # boto3 S3-compatible client. Endpoint is the account-scoped R2 URL:
     #   https://<account_id>.r2.cloudflarestorage.com
+    # The worker READS only (snapshot + epubs); it never writes to R2.
     r2_endpoint_url: str = ""
     r2_access_key_id: str = ""
     r2_secret_access_key: str = ""
     r2_bucket: str = "storyhub"
 
-    # --- Normalization tables (lifted from FFF) ----------------------------
-    # Default #readstatus written to Calibre for *fresh* imports only.
-    default_read_status: str = "Unread"
-    ship_shortname_overrides: dict[str, str] = field(
-        default_factory=_default_ship_overrides
-    )
-    collection_keywords: list[list[str]] = field(
-        default_factory=_default_collection_keywords
-    )
-
-    # --- FanFicFare update-check tunables (Phase 2 chunk 7) ----------------
-    fanficfare_cmd: str = (
-        r"C:\Users\world\AppData\Local\Programs\Python\Python312\Scripts\fanficfare.exe"
-    )
-    # is_adult=true is required to fetch Mature/Explicit AO3 stories.
-    fanficfare_extra_options: list[str] = field(
-        default_factory=lambda: ["is_adult=true"]
-    )
-    fanficfare_batch_size: int = 5
-    fanficfare_batch_delay: int = 10
-    fanficfare_story_delay: int = 20
-    fanficfare_timeout: int = 120
-
-    # --- X4 / Xteink transfer tunables (Phase 2 chunk 8) -------------------
+    # --- X4 / Xteink transfer (redesign §12.5) -----------------------------
     # Optional SD-card mount path; empty = auto-detect by scanning removable
     # drives for a .crosspoint/ directory at root.
     xteink_sd_path: str = ""
-    xteink_included_statuses: list[str] = field(
-        default_factory=lambda: ["Unread", "Priority", "Favorite"]
-    )
+    # Status folders the worker OWNS on the device — files under these are subject
+    # to add/remove. Targets only ever use {Unread, Favorite} (eligibility =
+    # is_favorite OR read_status=Unread), but legacy {Priority, Read, DNF} stay in
+    # the managed set so stale folders from the FFF era get cleaned up if present.
     xteink_managed_statuses: list[str] = field(
-        default_factory=lambda: ["Unread", "Priority", "Favorite", "Read", "DNF"]
+        default_factory=lambda: ["Unread", "Favorite", "Priority", "Read", "DNF"]
     )
     xteink_catalog_solo_fandoms: list[str] = field(
         default_factory=_default_xteink_solo_fandoms
     )
+
+    # --- Local backup pull (redesign §12.4) --------------------------------
+    # Destination folder for the backup_pull job: a plain offline mirror of the
+    # current snapshot + every epub from R2. Empty = job fails with a clear message.
+    backup_dir: str = ""
 
     @property
     def api_base(self) -> str:
         return self.railway_url.rstrip("/") + "/api"
 
     def is_configured(self) -> bool:
-        """True once the Phase-1 round-trip can run. Calibre/R2 creds are
-        validated separately by the Phase-2 paths that need them, so a
-        not-yet-filled Calibre password doesn't block the heartbeat shell."""
+        """True once the hub round-trip (heartbeat + pc_jobs poll) can run. R2 creds
+        are validated separately by the jobs that need them, so a not-yet-filled R2
+        key doesn't block the heartbeat shell."""
         return bool(self.railway_url and self.auth_token)
-
-    def is_calibre_configured(self) -> bool:
-        return bool(
-            self.calibre_url and self.calibre_username and self.calibre_password
-        )
 
     def is_r2_configured(self) -> bool:
         return bool(
@@ -180,7 +97,9 @@ def load_settings() -> Settings:
     """Load settings, bootstrapping a template file on first run.
 
     Unknown keys are ignored and missing keys fall back to defaults, so a
-    settings file written by an older/newer worker still loads cleanly.
+    settings file written by an older/newer worker still loads cleanly — this is
+    also what lets the Phase-1/2 Calibre/FanFicFare keys in an existing
+    settings.json be silently dropped now that those fields are gone.
     """
     if not SETTINGS_PATH.exists():
         return _bootstrap()

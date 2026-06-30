@@ -19,7 +19,9 @@ export default defineConfig({
         // sql-wasm.wasm (~660KB) must be precached for offline — wasm isn't in the default globs.
         globPatterns: ['**/*.{js,css,html,wasm,svg,png,woff2}'],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        // Don't fall back to index.html for cross-origin API calls.
+        // SPA fallback: serve the app shell for in-scope navigations (e.g. the
+        // share-target's /share route), but never for cross-origin API calls.
+        navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//],
       },
       manifest: {
@@ -30,6 +32,14 @@ export default defineConfig({
         background_color: '#f9fafb',
         display: 'standalone',
         start_url: '/',
+        // OS share sheet -> StoryHub. GET so the link arrives as query params the
+        // app reads at boot (data/share.ts); platforms vary on which param holds
+        // the link, so we accept all three.
+        share_target: {
+          action: '/share',
+          method: 'GET',
+          params: { title: 'title', text: 'text', url: 'url' },
+        },
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },

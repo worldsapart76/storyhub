@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS works (
                         CHECK (read_status IN ('Unread','Read','DNF')),
     is_favorite       boolean NOT NULL DEFAULT false,
     pinned            boolean NOT NULL DEFAULT false, -- [RESOLVED #3] see notes
+    personal_notes    text,                           -- user's freeform private note
     date_read         timestamptz,
     date_added        timestamptz,
     availability      text NOT NULL DEFAULT 'live'

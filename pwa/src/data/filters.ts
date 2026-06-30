@@ -24,7 +24,7 @@ export const WORDCOUNT_BUCKETS = ['<10k', '10–30k', '30–80k', '80k+'] as con
 /* Canonical category order for the panel (mirrors mock TAG_CATEGORIES; redesign
    §6.3.1). Any category present in the data but not listed sorts to the end. */
 const CATEGORY_ORDER: Category[] = [
-  'Fandom', 'Relationship', 'Character', 'Identity', 'Universe',
+  'Fandom', 'Relationship', 'Character', 'Trait', 'Identity', 'Universe',
   'Content', 'Trope', 'Dynamics', 'Mood', 'Structure', 'Other',
 ]
 
@@ -119,7 +119,12 @@ export type Facets = { categories: Facet[]; authors: string[] }
    library, so every chip/suggestion matches an actual tag in the data. `favNames`
    (favorited tag display-names from Tag Management) marks which tags show by
    default in each Browse category box. */
-export function buildFacets(works: Work[], favNames?: Set<string>): Facets {
+/* `keptFandoms` (when non-empty) restricts the Fandom category's filter OPTIONS to
+   that set — the fandoms that are some work's primary collection (derived, see
+   readKeptFandomNames). Non-primary fandoms (crossover/anthology drag-ins) drop out
+   of the Fandom dropdown but stay on story cards. Empty/omitted = show all (e.g.
+   before the snapshot db has loaded). */
+export function buildFacets(works: Work[], favNames?: Set<string>, keptFandoms?: Set<string>): Facets {
   const byCat = new Map<Category, Map<string, number>>()
   const authors = new Map<string, number>()
 
@@ -139,12 +144,19 @@ export function buildFacets(works: Work[], favNames?: Set<string>): Facets {
     return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b)
   })
 
-  const categories: Facet[] = present.map((category) => ({
-    category,
-    tags: [...byCat.get(category)!.entries()]
-      .map(([name, count]) => ({ name, count, favorite: favNames?.has(name) || undefined }))
-      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
-  }))
+  const restrictFandom = !!keptFandoms && keptFandoms.size > 0
+  const categories: Facet[] = present.map((category) => {
+    let entries = [...byCat.get(category)!.entries()]
+    if (category === 'Fandom' && restrictFandom) entries = entries.filter(([name]) => keptFandoms!.has(name))
+    return {
+      category,
+      tags: entries
+        // Trait = property-group bundles; there are few, so show them all by default
+        // (favorite:true) rather than gating behind search like raw-tag categories.
+        .map(([name, count]) => ({ name, count, favorite: category === 'Trait' ? true : (favNames?.has(name) || undefined) }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    }
+  })
 
   return { categories, authors: [...authors.keys()].sort((a, b) => a.localeCompare(b)) }
 }

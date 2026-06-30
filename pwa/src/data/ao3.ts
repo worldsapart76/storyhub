@@ -26,9 +26,15 @@ export async function enqueueAo3SideEffects(workId: number, edit: Edit): Promise
   if (workId <= 0) return // pre-AO3 local work — not on AO3
 
   const actions: Array<{ action: Ao3ActionType; params?: object }> = []
-  if (edit.readStatus === 'Read' || edit.readStatus === 'DNF') actions.push({ action: 'mark_read' })
+
+  // Favorite -> private bookmark (+ marked read); un-favorite -> remove bookmark (§12.2).
+  if (edit.isFavorite === true) actions.push({ action: 'bookmark', params: { private: true } })
+  else if (edit.isFavorite === false) actions.push({ action: 'remove_bookmark' })
+
+  // Read-status. Favorite also implies "marked read" on AO3 — add mark_read once.
+  const wantsRead = edit.readStatus === 'Read' || edit.readStatus === 'DNF' || edit.isFavorite === true
+  if (wantsRead) actions.push({ action: 'mark_read' })
   else if (edit.readStatus === 'Unread') actions.push({ action: 'mark_for_later' })
-  // edit.isFavorite -> bookmark side-effects: wired with the extension bookmark drain.
 
   for (const a of actions) {
     try {

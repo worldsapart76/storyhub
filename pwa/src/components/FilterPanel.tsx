@@ -23,6 +23,9 @@ export function FilterPanel({
   facets,
   live,
   onSaveFilter,
+  onToggleTagFavorite,
+  onClearAll,
+  extraActive,
 }: {
   value: FilterState
   onChange: (next: FilterState) => void
@@ -31,6 +34,15 @@ export function FilterPanel({
      boxes show live counts and hide zero-match options. */
   live?: DependentFacets
   onSaveFilter?: (name: string, starred: boolean) => void
+  /* Persist a tag favorite (★ on a category-box chip) to the hub. */
+  onToggleTagFavorite?: (category: string, name: string, fav: boolean) => void
+  /* "Clear all" — when provided, the parent also clears its own Browse state (search
+     box, active list/saved-filter chip), not just the filter chips. Falls back to
+     clearing just the filter when omitted (e.g. the design gallery). */
+  onClearAll?: () => void
+  /* The parent has clearable state beyond the filter chips (search text / active
+     chip), so "Clear all" stays enabled even when no filter chips are set. */
+  extraActive?: boolean
 }) {
   const [saving, setSaving] = useState(false)
   const [saveName, setSaveName] = useState('')
@@ -101,8 +113,10 @@ export function FilterPanel({
           </div>
           <button
             className="fpanel__clear"
-            disabled={activeCount(value) === 0}
-            onClick={() => onChange({ status: {}, favorite: false, rating: {}, buckets: [], wordMin: '', wordMax: '', tags: {}, authors: [] })}
+            disabled={activeCount(value) === 0 && !extraActive}
+            onClick={() => (onClearAll
+              ? onClearAll()
+              : onChange({ status: {}, favorite: false, rating: {}, buckets: [], wordMin: '', wordMax: '', tags: {}, authors: [] }))}
           >Clear all</button>
         </div>
       </header>
@@ -161,9 +175,12 @@ export function FilterPanel({
             category={category}
             tags={tags}
             counts={live?.tags.get(category)}
-            defaultOpen={false}
+            defaultOpen={category === 'Trait'}
             value={value.tags[category] ?? emptyCatFilter()}
             onChange={(next) => setCat(category, next)}
+            // Traits are property-group bundles, not real tag rows — don't try to
+            // persist a favorite for them (the star just shows/hides locally).
+            onFavoriteTag={category === 'Trait' ? undefined : onToggleTagFavorite}
           />
         ))}
 

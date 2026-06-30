@@ -13,6 +13,7 @@ from pathlib import Path
 from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .auth import require_token
 from .config import get_settings
@@ -21,6 +22,8 @@ from .routers import (
     ao3_actions,
     categories,
     groups,
+    pc_jobs,
+    pending,
     queue,
     reading_lists,
     saved_filters,
@@ -70,12 +73,29 @@ for module in (
     categories,
     queue,
     ao3_actions,
+    pending,
     snapshot,
     worker,
+    pc_jobs,
     reading_lists,
     saved_filters,
 ):
     app.include_router(module.router, prefix="/api", dependencies=_protected)
+
+
+class SPAStaticFiles(StaticFiles):
+    """Serve the built PWA, falling back to index.html for unmatched in-app routes
+    (e.g. the share-target's /share) so a deep link or a share before the service
+    worker is controlling still boots the SPA instead of 404ing. API paths keep
+    their real 404 — they never want the app shell."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404 and not path.startswith("api"):
+                return await super().get_response("index.html", scope)
+            raise
 
 
 # Serve the built PWA same-origin (built into railway/web by `vite build`). Mounted
@@ -83,4 +103,4 @@ for module in (
 # Guarded so the API still boots if the PWA hasn't been built into the image.
 _web = Path(__file__).resolve().parent.parent / "web"
 if _web.is_dir():
-    app.mount("/", StaticFiles(directory=str(_web), html=True), name="web")
+    app.mount("/", SPAStaticFiles(directory=str(_web), html=True), name="web")

@@ -1,14 +1,15 @@
-"""The worker engine: heartbeat + queue-drain loop.
+"""The worker engine: heartbeat + pc_jobs dispatch loop (redesign §12.4).
 
-Phase 1 is a *shell*. It drains pending queue items and acks each as `done`
-WITHOUT doing any work — no Calibre, no R2. This proves the round-trip
-(something enqueues -> worker drains -> Railway shows it done) and the heartbeat
-liveness path. Real processing lands in Phase 2.
+The worker is a thin agent. Each tick it heartbeats (liveness for the dashboard's
+Transfer button) and, if a `pc_jobs` row is pending, claims the oldest one, runs
+its handler (X4 transfer / backup pull), and reports the terminal status + log.
+One job at a time — single user, single device.
 
 The loop runs on its own thread; a threading.Event drives clean shutdown so the
 tray's Quit (or Ctrl-C headless) stops it promptly between sleeps. Per-request
 errors are caught and logged so a transient Railway/network blip never kills the
-worker — it just retries on the next tick.
+worker — it just retries on the next tick. A job that raises is reported `failed`
+with the error in its log, never crashing the loop.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ import time
 
 import httpx
 
+from . import jobs
 from .api import RailwayClient
 from .config import Settings
 from .logging_setup import recent_log_lines
@@ -66,7 +68,7 @@ class WorkerEngine:
                 if now >= next_heartbeat:
                     self._safe_heartbeat(client)
                     next_heartbeat = now + self.settings.heartbeat_interval_seconds
-                self._safe_drain(client)
+                self._poll_job(client)
                 self._stop.wait(self.settings.poll_interval_seconds)
         finally:
             client.close()
@@ -81,31 +83,46 @@ class WorkerEngine:
         except httpx.HTTPError as exc:
             log.warning("heartbeat failed: %s", exc)
 
-    def _safe_drain(self, client: RailwayClient) -> None:
+    def _poll_job(self, client: RailwayClient) -> None:
+        """Claim and run one pending job, if any."""
         try:
-            items = client.pending_queue(self.settings.queue_batch_limit)
+            job = client.claim_job()
         except httpx.HTTPError as exc:
-            log.warning("queue poll failed: %s", exc)
+            log.warning("job claim failed: %s", exc)
             return
-
-        if not items:
+        if job is None:
             return
-        if len(items) >= self.settings.queue_batch_limit:
-            # No silent caps (FFF principle): say what's deferred to next poll.
-            log.warning(
-                "queue drain hit batch limit %d — more items remain, continuing next poll",
-                self.settings.queue_batch_limit,
-            )
+        self._run_job(client, job)
 
-        acked = 0
-        for item in items:
-            if self._stop.is_set():
-                break
-            item_id = item.get("id")
+    def _run_job(self, client: RailwayClient, job: dict) -> None:
+        job_id = job.get("id")
+        job_type = job.get("job_type")
+        log.info("running job %s (%s)", job_id, job_type)
+        lines: list[str] = []
+
+        def progress(msg: str) -> None:
+            lines.append(msg)
+            log.info("[job %s] %s", job_id, msg)
+            # Stream the log AND beat — a long transfer would otherwise miss its
+            # heartbeat window and show the worker offline mid-run.
             try:
-                client.ack(item_id, status="done")
-                acked += 1
+                client.job_progress(job_id, "\n".join(lines))
             except httpx.HTTPError as exc:
-                log.warning("ack failed for %s: %s", item_id, exc)
-        if acked:
-            log.info("drained %d queue item(s) (Phase 1 no-op -> done)", acked)
+                log.warning("progress update failed for %s: %s", job_id, exc)
+            try:
+                client.heartbeat(recent_log_lines(20))
+            except httpx.HTTPError:
+                pass
+
+        try:
+            summary = jobs.run(job, self.settings, client, progress)
+            lines.append(summary or "done")
+            client.finish_job(job_id, "done", "\n".join(lines))
+            log.info("job %s done", job_id)
+        except Exception as exc:  # noqa: BLE001 - report, never crash the loop
+            log.exception("job %s failed", job_id)
+            lines.append(f"ERROR: {exc}")
+            try:
+                client.finish_job(job_id, "failed", "\n".join(lines))
+            except httpx.HTTPError as e2:
+                log.warning("could not report failure for %s: %s", job_id, e2)

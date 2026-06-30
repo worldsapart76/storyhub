@@ -25,7 +25,7 @@ from pathlib import Path
 
 from . import r2
 
-FORMAT_VERSION = 1
+FORMAT_VERSION = 3  # 3: + work_cards.personal_notes
 
 RELATIONAL = ["works", "tags", "tag_groups", "tag_group_members", "work_tags",
               "work_authors", "reading_lists", "reading_list_members",
@@ -104,6 +104,16 @@ async def build_sqlite(conn) -> tuple[bytes, int]:
                 "JOIN tag_groups g ON g.group_id=m.group_id "
                 "WHERE g.group_type='collection'"):
             coll_of.setdefault(r["tag_id"], r["name"])
+        # Property (roll-up) groups → filterable "traits" (§6.3.1: property drives
+        # trait filtering). Keyed by member tag_id; a work gets the trait if any of
+        # its tags — or their canonicals (membership is defined on canonicals; raw
+        # synonyms inherit) — is a member.
+        prop_of: dict[int, list[str]] = {}
+        for r in await conn.fetch(
+                "SELECT m.tag_id, g.name FROM tag_group_members m "
+                "JOIN tag_groups g ON g.group_id=m.group_id "
+                "WHERE g.group_type='property'"):
+            prop_of.setdefault(r["tag_id"], []).append(r["name"])
         authors: dict[int, list[str]] = {}
         for r in await conn.fetch(
                 "SELECT wa.work_id, a.name FROM work_authors wa "
@@ -128,7 +138,8 @@ async def build_sqlite(conn) -> tuple[bytes, int]:
             work_id INTEGER PRIMARY KEY, title, authors, primary_ship,
             primary_collection, wordcount, chapter_count, is_complete, rating,
             read_status, is_favorite, pinned, availability, source, source_url,
-            language, date_added, date_read, summary_html, tags)""")
+            language, date_added, date_read, summary_html, tags,
+            series_name, series_index, personal_notes)""")
 
         works = await conn.fetch("SELECT * FROM works")
         for w in works:
@@ -138,13 +149,23 @@ async def build_sqlite(conn) -> tuple[bytes, int]:
                 key=lambda e: (KIND_ORDER.get(tags[e["tag_id"]]["kind"], 9), e["position"] or 0))
             card_tags, seen = [], set()
             primary_ship = primary_collection = None
+            traits: set[str] = set()
             for e in entries:
-                name, kind, cat, grouped = resolve(e["tag_id"])
+                tid = e["tag_id"]
+                name, kind, cat, grouped = resolve(tid)
                 if e["is_primary_ship"]:
                     primary_ship = name
                 if e["is_primary_collection"]:
-                    primary_collection = coll_of.get(e["tag_id"]) or name
-                if is_excluded(e["tag_id"]):
+                    primary_collection = coll_of.get(tid) or name
+                # Collect property-group traits (from the tag and its canonical) even
+                # for excluded tags — the trait is the work's, separate from the chip.
+                for gname in prop_of.get(tid, ()):
+                    traits.add(gname)
+                canon = tags[tid]["canonical_tag_id"]
+                if canon:
+                    for gname in prop_of.get(canon, ()):
+                        traits.add(gname)
+                if is_excluded(tid):
                     continue  # hidden everywhere except Tag Management
                 cat_box = _card_category(kind, cat)
                 if (name, cat_box) in seen:
@@ -154,15 +175,19 @@ async def build_sqlite(conn) -> tuple[bytes, int]:
                 if grouped:
                     tag["grouped"] = True
                 card_tags.append(tag)
+            # Append the work's property-group traits as a filterable "Trait" facet.
+            for gname in sorted(traits):
+                card_tags.append({"name": gname, "category": "Trait"})
             sq.execute(
-                "INSERT INTO work_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO work_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (wid, w["title"], json.dumps(authors.get(wid, [])), primary_ship,
                  primary_collection, w["wordcount"], w["chapter_count"],
                  None if w["is_complete"] is None else int(w["is_complete"]),
                  w["rating"], w["read_status"], int(w["is_favorite"]), int(w["pinned"]),
                  w["availability"], w["source"], w["source_url"], w["language"],
                  _sqlval(w["date_added"]), _sqlval(w["date_read"]),
-                 w["summary_html"], json.dumps(card_tags)))
+                 w["summary_html"], json.dumps(card_tags),
+                 w["series_name"], _sqlval(w["series_index"]), w["personal_notes"]))
         sq.commit()
         count = len(works)
     finally:

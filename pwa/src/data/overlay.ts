@@ -6,7 +6,7 @@
 
 import type { ReadStatus, Work } from './types'
 
-export type Edit = Partial<{ readStatus: ReadStatus; isFavorite: boolean; pinned: boolean }>
+export type Edit = Partial<{ readStatus: ReadStatus; isFavorite: boolean; pinned: boolean; personalNotes: string }>
 
 const DB_NAME = 'storyhub-edits'
 const STORE = 'edits'

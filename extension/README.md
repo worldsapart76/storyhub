@@ -49,13 +49,18 @@ mode (no store submission).
   work title. Epub fetched in-page (session cookie); the SW does the hub POSTs +
   R2 PUT (R2 host added to host_permissions so the PUT is CORS-exempt). Native
   rails-ujs click intercepted (preventDefault) so capture isn't aborted by nav.
-- **E4 — `ao3_actions` drain (read-status): DONE.** `content/drain.js`: on any AO3
-  page load, pulls pending `ao3_actions`, performs `mark_read` / `mark_for_later`
-  via same-origin POST, acks done/failed (storage lock avoids multi-tab races).
-  `bookmark` / `remove_bookmark` left pending until the bookmark chunk. Precursor
-  done: live DB `ao3_actions` CHECK now allows `mark_for_later`
-  (`railway/migrations/0002_ao3_actions_mark_for_later.sql`, applied). PWA enqueues
-  the read-status side-effects (`pwa/src/data/ao3.ts` ← `library.tsx`).
+- **Pending-queue redesign (SUPERSEDES the E4 auto-drain): in progress.** Nothing
+  is performed on click — every AO3 action (`content/work.js`) creates a unified
+  `pending_changes` item via `POST /api/pending` (origin `ao3`) and toasts "Queued:
+  …"; no instant AO3 change, no badge change. The on-AO3 **drawer**
+  (`content/drawer.js`, all AO3 pages) lists the queue and **Apply to AO3** performs
+  each item's side-effect from the page session, then acks (`/api/pending/{id}/ack-ao3`).
+  `content/drain.js` is **removed** — do not re-add a background drain. **AO3's mark
+  routes are Rails `button_to` forms — `lib/ao3.js` `action()` must POST
+  `_method=patch` + `authenticity_token` in the body; a raw HTTP `PATCH` is rejected
+  (Rails nulls the session → AO3 "you don't have permission…"). Do NOT revert to a
+  bare PATCH.** (Captures still use the old commit flow until the next chunk folds
+  them into the queue with epub staging + Review Queue.)
 - **Debounced snapshot rebuild: DONE.** After a capture / work-page status change
   the content script signals the SW, which (re)sets a 1-min alarm and rebuilds the
   snapshot once the burst settles — so adding many works across tabs triggers a

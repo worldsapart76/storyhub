@@ -1,0 +1,163 @@
+/* StoryHub on-AO3 queue drawer. High z-index, self-contained, prefixed classes so
+   it doesn't collide with AO3's styles. Dark, compact, single-user. */
+
+.sh-drawer-tab {
+  position: fixed;
+  right: 0;
+  top: 45%;
+  transform: translateY(-50%);
+  z-index: 2147483646;
+  writing-mode: vertical-rl;
+  background: #2b2440;
+  color: #cdbef0;
+  border: 1px solid #4a3f6b;
+  border-right: none;
+  border-radius: 8px 0 0 8px;
+  padding: 12px 6px;
+  font: 600 12px/1.2 system-ui, sans-serif;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.35);
+}
+.sh-drawer-tab.has-items { background: #5a3ea0; color: #fff; }
+
+.sh-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: 340px;
+  max-width: 92vw;
+  z-index: 2147483647;
+  background: #1b1726;
+  color: #e8e3f5;
+  border-left: 1px solid #3a3350;
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.5);
+  transform: translateX(100%);
+  transition: transform 0.18s ease-out;
+  display: flex;
+  flex-direction: column;
+  font: 13px/1.45 system-ui, sans-serif;
+}
+.sh-drawer.is-open { transform: none; }
+
+.sh-drawer__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid #3a3350;
+}
+.sh-drawer__title { font-weight: 700; font-size: 14px; }
+.sh-drawer__close {
+  background: none; border: none; color: #b8aed2; font-size: 22px; line-height: 1;
+  cursor: pointer; padding: 0 4px;
+}
+.sh-drawer__status { padding: 6px 14px; color: #9c93bb; font-size: 12px; min-height: 0; }
+.sh-drawer__status:empty { display: none; }
+
+.sh-drawer__catchup { padding: 10px 14px; border-bottom: 1px solid #3a3350; }
+/* Fetch section sits at the bottom, between the queue list and the Apply footer —
+   it acts on the queue directly above it. */
+.sh-drawer__fetch { padding: 10px 14px; border-top: 1px solid #3a3350; }
+.sh-drawer__fetchbtn {
+  width: 100%; background: #5a3ea0; color: #fff; border: none;
+  border-radius: 8px; padding: 8px; font-weight: 600; font-size: 12px; cursor: pointer;
+}
+.sh-drawer__fetchbtn:hover { background: #6a4ec0; }
+.sh-drawer__fetchbtn:disabled { opacity: 0.5; cursor: default; }
+.sh-drawer__fetchresult { margin: 8px 0 0; font-size: 12px; color: #b8aed2; }
+.sh-drawer__fetchresult:empty { display: none; }
+.sh-drawer__catchupbtn {
+  width: 100%; background: #241f33; color: #cdbef0; border: 1px solid #4a3f6b;
+  border-radius: 8px; padding: 8px; font-weight: 600; font-size: 12px; cursor: pointer;
+}
+.sh-drawer__catchupbtn:hover { background: #2c2640; }
+.sh-drawer__catchupbtn:disabled { opacity: 0.5; cursor: default; }
+.sh-drawer__catchupopt {
+  display: flex; align-items: center; gap: 6px; margin-top: 6px;
+  font-size: 11px; color: #9c93bb; cursor: pointer;
+}
+.sh-drawer__catchupopt input { accent-color: #5a3ea0; }
+.sh-drawer__catchupresult { margin-top: 8px; font-size: 12px; color: #b8aed2; }
+.sh-drawer__catchupresult:empty { display: none; }
+.sh-catchup__summary { color: #e8e3f5; }
+.sh-catchup__line { margin-top: 2px; }
+.sh-catchup__note { margin-top: 4px; color: #8a82a6; font-size: 11px; }
+.sh-catchup__warn { margin-top: 4px; color: #f0c674; font-size: 11px; line-height: 1.4; }
+
+.sh-drawer__auditbtn {
+  width: 100%; margin-top: 8px; background: none; color: #b8aed2;
+  border: 1px solid #4a3f6b; border-radius: 8px; padding: 7px; font-size: 12px; cursor: pointer;
+}
+.sh-drawer__auditbtn:hover { background: #241f33; }
+.sh-drawer__auditbtn:disabled { opacity: 0.5; cursor: default; }
+.sh-drawer__auditresult { margin-top: 8px; font-size: 12px; color: #b8aed2; }
+.sh-drawer__auditresult:empty { display: none; }
+.sh-audit__row { margin-top: 3px; }
+.sh-audit__row b { color: #e8e3f5; }
+
+.sh-drawer__reconbtn {
+  width: 100%; margin-top: 8px; background: none; color: #b8aed2;
+  border: 1px solid #4a3f6b; border-radius: 8px; padding: 7px; font-size: 12px; cursor: pointer;
+}
+.sh-drawer__reconbtn:hover { background: #241f33; }
+.sh-drawer__reconbtn:disabled { opacity: 0.5; cursor: default; }
+.sh-drawer__reconopt {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  margin-top: 6px; font-size: 11px; color: #9c93bb;
+}
+.sh-drawer__reconchunk {
+  width: 56px; background: #1a1626; color: #cdbef0; border: 1px solid #4a3f6b;
+  border-radius: 6px; padding: 4px 6px; font-size: 12px;
+}
+.sh-drawer__reconresult { margin-top: 8px; font-size: 12px; color: #b8aed2; }
+.sh-drawer__reconresult:empty { display: none; }
+
+.sh-action-btn {
+  width: 100%; margin-top: 8px; background: #5a3ea0; color: #fff; border: none;
+  border-radius: 8px; padding: 8px; font-weight: 600; font-size: 12px; cursor: pointer;
+}
+.sh-action-btn:hover { background: #6a4ec0; }
+.sh-action-btn:disabled { opacity: 0.5; cursor: default; }
+.sh-action-btn--quiet { background: none; color: #b8aed2; border: 1px solid #4a3f6b; }
+.sh-action-btn--quiet:hover { background: #241f33; }
+
+.sh-drawer__list { list-style: none; margin: 0; padding: 0 8px; overflow-y: auto; flex: 1; }
+.sh-drawer__empty { color: #8a82a6; text-align: center; padding: 24px 8px; }
+.sh-drawer__item {
+  display: flex; align-items: flex-start; gap: 8px; justify-content: space-between;
+  background: #241f33; border: 1px solid #352e4c; border-radius: 8px;
+  padding: 8px 10px; margin: 6px 0;
+}
+.sh-drawer__itemmain { min-width: 0; flex: 1; }
+.sh-drawer__itemtop { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.sh-drawer__act {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  color: #cdbef0; background: #3a2f5e; border-radius: 999px; padding: 1px 7px; flex: none;
+}
+.sh-drawer__work { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.sh-drawer__sides { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; font-size: 11px; }
+.sh-side { border-radius: 999px; padding: 0 6px; background: #2c2640; color: #9c93bb; }
+.sh-side--done { color: #7fd1a6; }
+.sh-side--pending { color: #d8cffa; }
+.sh-side--na { opacity: 0.5; }
+.sh-drawer__by { color: #8a82a6; }
+.sh-drawer__err { color: #ff9d96; font-size: 11px; margin-top: 3px; word-break: break-word; }
+.sh-drawer__cancel {
+  flex: none; background: none; border: 1px solid #4a4366; color: #b8aed2;
+  border-radius: 6px; font-size: 11px; padding: 3px 8px; cursor: pointer;
+}
+.sh-drawer__cancel:hover { border-color: #ff9d96; color: #ff9d96; }
+
+.sh-drawer__foot { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid #3a3350; }
+.sh-drawer__batch {
+  width: 46px; flex: none; background: #241f33; color: #e8e3f5; border: 1px solid #4a4366;
+  border-radius: 8px; text-align: center; font-size: 13px;
+}
+.sh-drawer__apply {
+  flex: 1; background: #5a3ea0; color: #fff; border: none; border-radius: 8px;
+  padding: 9px; font-weight: 600; font-size: 13px; cursor: pointer;
+}
+.sh-drawer__apply:disabled { opacity: 0.5; cursor: default; }
+.sh-drawer__refresh {
+  background: none; border: 1px solid #4a4366; color: #b8aed2; border-radius: 8px;
+  font-size: 16px; padding: 0 12px; cursor: pointer;
+}

@@ -33,3 +33,14 @@ export async function putCachedSnapshot(version: number, bytes: ArrayBuffer): Pr
     req.onerror = () => reject(req.error)
   })
 }
+
+/* Drop the cached snapshot so the next load re-downloads regardless of version —
+   the recovery path for a stale/truncated local copy (Settings → Reload library). */
+export async function clearCachedSnapshot(): Promise<void> {
+  const db = await openDb()
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(STORE, 'readwrite').objectStore(STORE).delete(KEY)
+    req.onsuccess = () => resolve()
+    req.onerror = () => reject(req.error)
+  })
+}
